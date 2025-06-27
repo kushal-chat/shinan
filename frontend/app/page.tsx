@@ -1,97 +1,66 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import ContextPrompt from "./components/ContextPrompt";
+import FileUpload from "./components/FileUpload";
 
-const blue = "#2563eb";
-const lightGray = "#f7f8fa";
-const borderGray = "#e5e7eb";
-
-const waveVariants = {
-  animate: {
-    y: [0, 10, 0],
-    transition: {
-      duration: 8,
-      repeat: Infinity,
-      ease: "easeInOut" as const
-    }
-  }
-};
-
-const guideVariants = {
-  initial: { opacity: 0, y: 20 },
-  animate: {
-    opacity: 0.7,
-    y: 0,
-    transition: { duration: 1.2, ease: "easeInOut" as const }
-  }
-};
-
-const cardVariants = {
-  initial: { opacity: 0, y: 30 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.7, ease: "easeInOut" as const } }
-};
-
-const headingUnderline = {
-  initial: { scaleX: 0 },
-  animate: { scaleX: 1, transition: { duration: 0.7, delay: 0.3, ease: "easeInOut" as const } }
-};
-
-const formStagger = {
-  animate: {
-    transition: {
-      staggerChildren: 0.13,
-      delayChildren: 0.5
-    }
-  }
-};
-
-const formFieldVariants = {
-  initial: { opacity: 0, y: 18 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeInOut" as const } }
-};
-
-const resultVariants = {
-  initial: { opacity: 0, scale: 0.98 },
-  animate: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: "easeInOut" as const } },
-  exit: { opacity: 0, scale: 0.98, transition: { duration: 0.3 } }
-};
+interface Message {
+  role: "user" | "bot";
+  text: string;
+}
 
 export default function Home() {
-  const [query, setQuery] = useState("");
-  const [context, setContext] = useState("");
-  const [result, setResult] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [shinanContext, setShinanContext] = useState<{
+    company: string;
+    role: string;
+    interests: string[];
+  } | null>(null);
+  const [activeTab, setActiveTab] = useState<"chat" | "upload">("chat");
+  const chatRef = useRef<HTMLDivElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setResult(null);
-    setError("");
-
-    let contextObj = undefined;
-    if (context.trim()) {
-      try {
-        contextObj = JSON.parse(context);
-      } catch {
-        setError("Context must be valid JSON");
-        setLoading(false);
-        return;
-      }
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
+  }, [messages, loading]);
 
+  // Handler to set context and send to backend
+  const handleSetContext = async (context: { company: string; role: string; interests: string[] }) => {
+    try {
+      const res = await fetch("http://localhost:8000/client/context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(context),
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      setShinanContext(context);
+    } catch (err: any) {
+      setError("Failed to set context: " + (err.message || "Unknown error"));
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || !shinanContext) return;
+    setMessages((msgs) => [...msgs, { role: "user", text: input }]);
+    setLoading(true);
+    setError("");
+    const userInput = input;
+    setInput("");
     try {
       const res = await fetch("http://localhost:8000/client/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, context: contextObj }),
+        body: JSON.stringify({ query: userInput }),
       });
-      if (!res.ok) {
-        throw new Error(`Server error: ${res.status}`);
-      }
-      const data = await res.text();
-      setResult(data);
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      setMessages((msgs) => [...msgs, { role: "bot", text: typeof data === "string" ? data : data.result || JSON.stringify(data) }]);
     } catch (err: any) {
+      setMessages((msgs) => [...msgs, { role: "bot", text: "Error: Could not get response." }]);
       setError(err.message || "Unknown error");
     } finally {
       setLoading(false);
@@ -102,155 +71,207 @@ export default function Home() {
     <div style={{
       minHeight: "100vh",
       width: "100vw",
-      overflow: "hidden",
-      position: "relative",
+      background: "#e6f9ed",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      background: lightGray
+      position: "relative"
     }}>
-      {/* Subtle ocean wave background */}
-      <motion.svg
-        style={{ position: "absolute", bottom: 0, left: 0, width: "100%", zIndex: 0, opacity: 0.13 }}
-        viewBox="0 0 1440 320"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        height="320"
-        variants={waveVariants}
-        animate="animate"
-      >
-        <path
-          fill={blue}
-          fillOpacity="0.5"
-          d="M0,224L48,202.7C96,181,192,139,288,128C384,117,480,139,576,154.7C672,171,768,181,864,186.7C960,192,1056,192,1152,186.7C1248,181,1344,171,1392,165.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"
-        />
-      </motion.svg>
-      {/* Shinan overlay */}
-      <motion.div
-        variants={guideVariants}
-        initial="initial"
-        animate="animate"
-        style={{
-          position: "absolute",
-          top: 36,
-          left: 0,
-          width: "100%",
-          textAlign: "center",
-          zIndex: 2,
-          fontSize: 48,
-          fontWeight: 500,
-          color: blue,
-          letterSpacing: 6,
-          fontFamily: "'Noto Sans JP', 'Noto Sans SC', 'Microsoft YaHei', sans-serif",
-          userSelect: "none",
-          opacity: 0.7
-        }}
-      >
-        Shinan
-      </motion.div>
-      <motion.main
-        variants={cardVariants}
-        initial="initial"
-        animate="animate"
-        style={{
-          background: "#fff",
-          borderRadius: 14,
-          border: `1px solid ${borderGray}`,
-          boxShadow: "none",
-          padding: 36,
-          width: 420,
-          maxWidth: "92vw",
-          zIndex: 3,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center"
-        }}
-      >
-        <div style={{ width: "100%", textAlign: "center", marginBottom: 24 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: 1, color: "#222", marginBottom: 0, fontFamily: "'Noto Sans JP', 'Noto Sans SC', 'Microsoft YaHei', sans-serif" }}>
-            Shinan Query Client
-          </h1>
-          <motion.div
-            variants={headingUnderline}
-            initial="initial"
-            animate="animate"
-            style={{
-              height: 2,
-              width: 48,
-              background: blue,
-              margin: "10px auto 0 auto",
-              borderRadius: 2,
-              transformOrigin: "left center"
-            }}
-          />
-        </div>
-        <motion.form
-          onSubmit={handleSubmit}
-          style={{ width: "100%", display: "flex", flexDirection: "column", gap: 18 }}
-          variants={formStagger}
-          initial="initial"
-          animate="animate"
+      <AnimatePresence>
+        {!shinanContext && (
+          <ContextPrompt onSubmit={handleSetContext} />
+        )}
+      </AnimatePresence>
+      {shinanContext && (
+        <motion.div
+          initial={{ opacity: 0, y: 40, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 40, scale: 0.95 }}
+          transition={{ duration: 0.5, type: "spring", stiffness: 120 }}
+          style={{
+            background: "#f3fff6",
+            borderRadius: 24,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.10)",
+            width: 700,
+            maxWidth: "98vw",
+            minHeight: 700,
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
+            zIndex: 2
+          }}
         >
-          <motion.div style={{ display: "flex", flexDirection: "column", gap: 6 }} variants={formFieldVariants}>
-            <label style={{ fontWeight: 400, color: "#222", fontSize: 15, marginBottom: 2 }}>Query</label>
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              style={{ padding: 8, border: `1px solid ${borderGray}`, borderRadius: 6, background: "#fafbfc", fontSize: 15 }}
-              placeholder="e.g. What is the Rotten Tomatoes rating of The Incredibles?"
-              required
-            />
-          </motion.div>
-          <motion.div style={{ display: "flex", flexDirection: "column", gap: 6 }} variants={formFieldVariants}>
-            <label style={{ fontWeight: 400, color: "#222", fontSize: 15, marginBottom: 2 }}>Context (JSON, optional)</label>
-            <textarea
-              value={context}
-              onChange={e => setContext(e.target.value)}
-              rows={3}
-              style={{ width: '100%', marginBottom: 12, padding: 8, border: `1px solid ${borderGray}`, borderRadius: 6, background: "#fafbfc", fontSize: 15 }}
-              placeholder='e.g. {"user_id": "123"}'
-            />
-          </motion.div>
-          <motion.button
-            type="submit"
-            disabled={loading}
-            whileHover={{ scale: loading ? 1 : 1.03 }}
-            whileTap={{ scale: loading ? 1 : 0.98 }}
-            style={{
-              background: blue,
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              padding: "12px 0",
-              fontWeight: 500,
-              fontSize: 16,
-              cursor: loading ? "not-allowed" : "pointer",
-              boxShadow: "none",
-              transition: "background 0.2s",
-              marginTop: 6
-            }}
-            variants={formFieldVariants}
-          >
-            {loading ? "Submitting..." : "Submit"}
-          </motion.button>
-        </motion.form>
-        {error && <div style={{ color: 'red', marginTop: 16 }}>{error}</div>}
-        <AnimatePresence>
-          {result && (
-            <motion.div
-              key="result"
-              variants={resultVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              style={{ marginTop: 28, width: "100%" }}
+          <div style={{ display: "flex", justifyContent: "center", gap: 0, borderBottom: "1px solid #b6e2c6", background: "#e6f9ed" }}>
+            <button
+              onClick={() => setActiveTab("chat")}
+              style={{
+                flex: 1,
+                padding: "18px 0",
+                fontWeight: 700,
+                fontSize: 18,
+                background: activeTab === "chat" ? "#f3fff6" : "#e6f9ed",
+                border: "none",
+                borderBottom: activeTab === "chat" ? "3px solid #3bb273" : "3px solid transparent",
+                color: activeTab === "chat" ? "#1a3d2f" : "#3bb273",
+                cursor: "pointer",
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 0,
+                outline: "none",
+                transition: "all 0.2s"
+              }}
             >
-              <pre style={{ background: "#f8fafc", padding: 18, borderRadius: 8, fontSize: 14, color: "#222", border: `1px solid ${borderGray}`, fontFamily: "'JetBrains Mono', 'Menlo', 'monospace" }}>{result}</pre>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.main>
+              Chat
+            </button>
+            <button
+              onClick={() => setActiveTab("upload")}
+              style={{
+                flex: 1,
+                padding: "18px 0",
+                fontWeight: 700,
+                fontSize: 18,
+                background: activeTab === "upload" ? "#f3fff6" : "#e6f9ed",
+                border: "none",
+                borderBottom: activeTab === "upload" ? "3px solid #3bb273" : "3px solid transparent",
+                color: activeTab === "upload" ? "#1a3d2f" : "#3bb273",
+                cursor: "pointer",
+                borderTopLeftRadius: 0,
+                borderTopRightRadius: 16,
+                outline: "none",
+                transition: "all 0.2s"
+              }}
+            >
+              Upload
+            </button>
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f3fff6" }}>
+            <AnimatePresence mode="wait">
+              {activeTab === "chat" ? (
+                <motion.div
+                  key="chat"
+                  initial={{ opacity: 0, x: 40 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -40 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ flex: 1, display: "flex", flexDirection: "column", height: 0 }}
+                >
+                  <div
+                    ref={chatRef}
+                    style={{
+                      flex: 1,
+                      overflowY: "auto",
+                      padding: 36,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 18,
+                      minHeight: 400,
+                    }}
+                  >
+                    <AnimatePresence>
+                      {messages.map((msg, i) => (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          transition={{ duration: 0.2 }}
+                          style={{
+                            alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+                            maxWidth: "80%",
+                            background: msg.role === "user" ? "#3bb273" : "#e6f9ed",
+                            color: msg.role === "user" ? "#fff" : "#1a3d2f",
+                            borderRadius: 14,
+                            padding: "14px 20px",
+                            fontSize: 17,
+                            boxShadow: msg.role === "user" ? "0 2px 8px rgba(59,178,115,0.08)" : "none",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {msg.text}
+                        </motion.div>
+                      ))}
+                      {loading && (
+                        <motion.div
+                          key="loading"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          style={{ alignSelf: "flex-start", color: "#3bb273", fontStyle: "italic" }}
+                        >
+                          Bot is typing...
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault();
+                      if (!loading) sendMessage();
+                    }}
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      padding: 24,
+                      borderTop: "1px solid #b6e2c6",
+                      background: "#e6f9ed",
+                      borderBottomLeftRadius: 24,
+                      borderBottomRightRadius: 24,
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      placeholder="Type your research question..."
+                      style={{
+                        flex: 1,
+                        border: "1px solid #b6e2c6",
+                        borderRadius: 10,
+                        padding: "14px 16px",
+                        fontSize: 17,
+                        outline: "none",
+                        background: "#fff",
+                        color: "#1a3d2f"
+                      }}
+                      disabled={loading}
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      disabled={loading || !input.trim()}
+                      style={{
+                        background: loading ? "#b6e2c6" : "#3bb273",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 10,
+                        padding: "0 28px",
+                        fontWeight: 700,
+                        fontSize: 17,
+                        cursor: loading ? "not-allowed" : "pointer",
+                        transition: "background 0.2s"
+                      }}
+                    >
+                      Send
+                    </button>
+                  </form>
+                  {error && <div style={{ color: '#e74c3c', margin: 8, textAlign: 'center' }}>{error}</div>}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="upload"
+                  initial={{ opacity: 0, x: -40 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 40 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ flex: 1, display: "flex", flexDirection: "column", height: 0, padding: 36 }}
+                >
+                  <FileUpload />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }
