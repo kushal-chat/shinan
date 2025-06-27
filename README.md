@@ -1,36 +1,157 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Shinan - LLM Chat Application
 
-## Getting Started
+A modern, full-stack LLM chat application built with FastAPI backend and Next.js frontend.
 
-First, run the development server:
+## 🏗️ Architecture
 
+- **Backend**: FastAPI (Python) - RESTful API with async support
+- **Frontend**: Next.js (React/TypeScript) - Modern web interface
+- **Containerization**: Docker & Docker Compose
+- **Package Management**: UV (Python), npm (Node.js)
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Docker Desktop
+- Python 3.13+
+- Node.js 20+
+
+### Development Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd shinan
+   ```
+
+2. **Start with Docker Compose**
+   ```bash
+   docker-compose up --build
+   ```
+
+3. **Access the application**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - API Documentation: http://localhost:8000/docs
+
+### Local Development
+
+#### Backend
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd backend/app
+uv sync
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+#### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📁 Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+shinan/
+├── docker-compose.yml          # Multi-service orchestration
+├── backend/
+│   └── app/
+│       ├── main.py            # FastAPI application entry point
+│       ├── routers/           # API route modules
+│       ├── pyproject.toml     # Python dependencies
+│       └── Dockerfile         # Backend container
+├── frontend/
+│   ├── app/                   # Next.js app directory
+│   ├── components/            # React components
+│   ├── package.json           # Node.js dependencies
+│   └── Dockerfile             # Frontend container
+└── README.md                  # This file
+```
 
-## Learn More
+## 🛠️ Development
 
-To learn more about Next.js, take a look at the following resources:
+### Adding New API Endpoints
+1. Create new router in `backend/app/routers/`
+2. Import and include in `main.py`
+3. Update API documentation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Adding New Frontend Features
+1. Create components in `frontend/components/`
+2. Add pages in `frontend/app/`
+3. Update TypeScript types as needed
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🐳 Docker
 
-## Deploy on Vercel
+### Build Images
+```bash
+# Build all services
+docker-compose build
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Build specific service
+docker-compose build backend
+docker-compose build frontend
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Run Services
+```bash
+# Start all services
+docker-compose up
+
+# Start in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+Create `.env` files for local development:
+
+```bash
+# backend/app/.env
+OPENAI_API_KEY=your_api_key_here
+DATABASE_URL=postgresql://user:pass@localhost/db
+
+# frontend/.env.local
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+## 🧪 Testing
+
+### Backend Tests
+```bash
+cd backend/app
+uv run pytest
+```
+
+### Frontend Tests
+```bash
+cd frontend
+npm test
+```
+
+## 📦 Deployment
+
+### Production Build
+```bash
+# Build production images
+docker-compose -f docker-compose.prod.yml build
+
+# Deploy
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details 
