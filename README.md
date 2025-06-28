@@ -1,42 +1,59 @@
-# Shinan - LLM Chat Application
+# Shinan - LLM Chat & Research Platform
 
-A modern, full-stack LLM chat application built with FastAPI backend and Next.js frontend.
+A modern, full-stack AI research and chat platform with real-time agent feedback, file (PDF/PNG) upload, and context-aware conversations.  
+Built with **FastAPI** (Python) and **Next.js** (React/TypeScript).
+
+---
+
+## ✨ Features
+
+- **Conversational AI**: Chat with an LLM-powered agent, with real-time progress feedback.
+- **Context Prompt**: On first use, users provide company, role, and interests to personalize the experience.
+- **File Upload**: Upload PDF or PNG files for analysis and research (with OCR for PNGs).
+- **Agent Progress Streaming**: See live updates as the backend processes your query (e.g., "Generating ideas...", "Researching web...", "Writing report...").
+- **Modern UI**: Clean, green-themed interface with smooth animations (Framer Motion).
+- **Internationalization**: Friendly Japanese/English feedback messages.
+- **Dockerized**: Easy to run locally or deploy in production.
+
+---
 
 ## 🏗️ Architecture
 
-- **Backend**: FastAPI (Python) - RESTful API with async support
-- **Frontend**: Next.js (React/TypeScript) - Modern web interface
+- **Backend**: FastAPI (Python) - RESTful API, async, streaming support
+- **Frontend**: Next.js (React/TypeScript) - Modern SPA, Framer Motion
 - **Containerization**: Docker & Docker Compose
-- **Package Management**: UV (Python), npm (Node.js)
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Docker Desktop
-- Python 3.13+
-- Node.js 20+
 
-### Development Setup
+- Docker Desktop (recommended)
+- Python 3.10+
+- Node.js 18+
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd shinan
-   ```
+### 1. Clone the repository
 
-2. **Start with Docker Compose**
-   ```bash
-   docker-compose up --build
-   ```
+```bash
+git clone <repository-url>
+cd shinan
+```
 
-3. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+### 2. Start with Docker Compose
 
-### Local Development
+```bash
+docker-compose up --build
+```
+
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+### 3. Local Development
 
 #### Backend
+
 ```bash
 cd backend/app
 uv sync
@@ -44,114 +61,79 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 #### Frontend
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## 📁 Project Structure
+---
 
-```
-shinan/
-├── docker-compose.yml          # Multi-service orchestration
-├── backend/
-│   └── app/
-│       ├── main.py            # FastAPI application entry point
-│       ├── routers/           # API route modules
-│       ├── pyproject.toml     # Python dependencies
-│       └── Dockerfile         # Backend container
-├── frontend/
-│   ├── app/                   # Next.js app directory
-│   ├── components/            # React components
-│   ├── package.json           # Node.js dependencies
-│   └── Dockerfile             # Frontend container
-└── README.md                  # This file
-```
+## 🖥️ User Experience
 
-## 🛠️ Development
+- On first visit, users are prompted for **context** (company, role, interests).
+- **Chat**: Type a question and see real-time agent progress (steps) and the final answer.
+- **Upload**: Upload a PDF or PNG for analysis. Results appear in a chat bubble.
+- **Feedback**: After sending a message, a friendly "Thank you for using me, hang on a bit! ご利用、ありがとうございます！少々お待ちください。" message appears before agent steps.
 
-### Adding New API Endpoints
-1. Create new router in `backend/app/routers/`
-2. Import and include in `main.py`
-3. Update API documentation
+---
 
-### Adding New Frontend Features
-1. Create components in `frontend/components/`
-2. Add pages in `frontend/app/`
-3. Update TypeScript types as needed
+## 🛠️ API Endpoints
 
-## 🐳 Docker
+### `/client/context` (POST)
+Set the user context (company, role, interests).
 
-### Build Images
-```bash
-# Build all services
-docker-compose build
+### `/client/query` (POST)
+Submit a chat query. Returns the final answer (non-streaming).
 
-# Build specific service
-docker-compose build backend
-docker-compose build frontend
-```
+### `/client/query/stream` (POST)
+Submit a chat query and receive real-time progress updates and the final answer as a stream.
 
-### Run Services
-```bash
-# Start all services
-docker-compose up
+### `/client/upload` (POST)
+Upload a PDF or PNG for analysis. Returns the analysis result.
 
-# Start in background
-docker-compose up -d
+---
 
-# View logs
-docker-compose logs -f
-```
+## 🧩 Frontend Components
 
-## 🔧 Configuration
+- **ContextPrompt**: Modal for entering user context.
+- **FileUpload**: Button for uploading PDF/PNG, shows results in chat style.
+- **Chat UI**: Modern, animated chat with agent progress and bot/user bubbles.
 
-### Environment Variables
-Create `.env` files for local development:
-
-```bash
-# backend/app/.env
-OPENAI_API_KEY=your_api_key_here
-DATABASE_URL=postgresql://user:pass@localhost/db
-
-# frontend/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
+---
 
 ## 🧪 Testing
 
-### Backend Tests
+### Backend
+
 ```bash
 cd backend/app
 uv run pytest
 ```
 
-### Frontend Tests
+### Frontend
+
 ```bash
 cd frontend
 npm test
 ```
 
-## 📦 Deployment
+---
 
-### Production Build
+## 🐳 Docker
+
 ```bash
-# Build production images
-docker-compose -f docker-compose.prod.yml build
-
-# Deploy
-docker-compose -f docker-compose.prod.yml up -d
+docker-compose up --build
 ```
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+---
 
 ## 📄 License
 
-MIT License - see LICENSE file for details 
+MIT License
+
+---
+
+**Enjoy using Shinan!**  
+For questions or contributions, open an issue or pull request. 
