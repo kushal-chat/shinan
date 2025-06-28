@@ -8,6 +8,9 @@ class Prompt:
         self.material_prompt = self.get_material_prompt()
         self.text_prompt = self.get_text_prompt()
         self.guardrail_prompt = self.get_guardrail_prompt()
+        self.web_search_prompt = self.get_web_search_prompt()
+        self.verifier_prompt = self.get_verifier_prompt()
+        self.writer_prompt = self.get_writer_prompt()
     
     def get_material_prompt(self):
         """
@@ -93,6 +96,42 @@ class Prompt:
         """
         )
         return TEXT_PROMPT
+    
+    def get_web_search_prompt(self):
+        """
+        Get the web search prompt.
+        """
+        WEB_SEARCH_PROMPT = (
+            """
+        You are a web search agent. Given a search term, 
+        obtain a multimodal blog post or relevant article.
+        """
+        )
+        return WEB_SEARCH_PROMPT
+
+    def get_verifier_prompt(self):
+        """
+        Get the verifier prompt.
+        """
+        VERIFIER_PROMPT = (
+            """
+        You are a verifier agent. Given a report, 
+        verify that the report uses the context and provides a report relevant to the context.
+        """
+        )
+        return VERIFIER_PROMPT
+    
+    def get_writer_prompt(self):
+        """
+        Get the writer prompt.
+        """
+        WRITER_PROMPT = (
+            """
+        You are a writer agent. Given a report, 
+        write a report relevant to the context.
+        """
+        )
+        return WRITER_PROMPT
     
     def get_guardrail_prompt(self):
         """

@@ -1,7 +1,7 @@
 from agents import Agent, input_guardrail, Runner, GuardrailFunctionOutput
 from agents.run_context import RunContextWrapper
 from pydantic import BaseModel
-from .prompts import Prompt
+from ..prompts import Prompt
 
 GUARDRAIL_PROMPT = Prompt().guardrail_prompt
 

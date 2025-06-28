@@ -21,6 +21,7 @@ export default function Home() {
   } | null>(null);
   const [activeTab, setActiveTab] = useState<"chat" | "upload">("chat");
   const chatRef = useRef<HTMLDivElement>(null);
+  const [agentStep, setAgentStep] = useState<string | null>(null);
 
   useEffect(() => {
     if (chatRef.current) {
@@ -48,8 +49,16 @@ export default function Home() {
     setMessages((msgs) => [...msgs, { role: "user", text: input }]);
     setLoading(true);
     setError("");
+    setAgentStep(null);
     const userInput = input;
     setInput("");
+    // Show thank you message after 1 second
+    setTimeout(() => {
+      setMessages((msgs) => [
+        ...msgs,
+        { role: "bot", text: "Thank you for using me, hang on a bit! ご利用、ありがとうございます！少々お待ちください。" }
+      ]);
+    }, 1000);
     try {
       const res = await fetch("http://localhost:8000/client/query", {
         method: "POST",
@@ -190,7 +199,31 @@ export default function Home() {
                           {msg.text}
                         </motion.div>
                       ))}
-                      {loading && (
+                      {agentStep && (
+                        <motion.div
+                          key="agent-step"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          transition={{ duration: 0.2 }}
+                          style={{
+                            alignSelf: "flex-start",
+                            maxWidth: "80%",
+                            background: "#b6e2c6",
+                            color: "#1a3d2f",
+                            borderRadius: 14,
+                            padding: "14px 20px",
+                            fontSize: 17,
+                            fontStyle: "italic",
+                            marginTop: 4,
+                            marginBottom: 4,
+                            boxShadow: "0 2px 8px rgba(59,178,115,0.08)",
+                          }}
+                        >
+                          {agentStep}
+                        </motion.div>
+                      )}
+                      {loading && !agentStep && (
                         <motion.div
                           key="loading"
                           initial={{ opacity: 0 }}

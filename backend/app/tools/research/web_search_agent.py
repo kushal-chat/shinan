@@ -1,20 +1,16 @@
 from agents import Agent, function_tool, WebSearchTool
 from agents.model_settings import ModelSettings
 from pydantic import BaseModel
-
-PROMPT = (
-    "You are a web search agent. Given a search term, "
-    "obtain a multimodal blog post or relevant article."
-)
+from context import ShinanContext
+from ..prompts import Prompt
 
 class Materials(BaseModel):
     """A list of materials."""
     materials: list[str]
 
-
-web_search_agent = Agent(
+web_search_agent = Agent[ShinanContext](
     name="WebSearchAgent",
-    instructions=PROMPT,
+    instructions=Prompt().web_search_prompt,
     # mcp_servers=["brave", "fetch"],
     tools=[WebSearchTool()],
     model_settings=ModelSettings(tool_choice="required"),

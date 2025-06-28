@@ -7,23 +7,22 @@ from .guardrail_agent import sensitive_guardrail
 from pydantic import BaseModel
 from typing import Sequence
 from context import ShinanContext
-from .prompts import Prompt
+from ..prompts import Prompt
+from agents.model_settings import ModelSettings
 
-class Idea(BaseModel):
+class SearchIdea(BaseModel):
     """
     A search idea. 
     Defines:
     - query: The search idea.
-    - point_of_interest: Where in the slide this was found.
-    - reasoning: Why this is a good search idea in context of the material.
+    - reasoning: Why this is a good search idea in context of the text.
     """
     query: str
-    point_of_interest: str
     reasoning: str
 
-class Ideas(BaseModel):
+class SearchIdeas(BaseModel):
     """A list of search ideas."""
-    ideas: Sequence[Idea]
+    ideas: Sequence[SearchIdea]
 
 @function_tool
 def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
@@ -33,13 +32,13 @@ def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
     """
     return ctx.context.company, ctx.context.role, ctx.context.interests
 
-prompt = Prompt().material_prompt
+prompt = Prompt().text_prompt
 
-material_agent = Agent[ShinanContext](
-    name="MaterialAgent",
+text_agent = Agent[ShinanContext](
+    name="TextAgent",
     instructions=prompt,
-    model="o4-mini", # Note that o3-mini does not accept images.
-    output_type=Ideas,
+    model="o3-mini", # Note that o3-mini does not accept images.
+    output_type=SearchIdeas,
     tools=[context_tool],
-    input_guardrails=[sensitive_guardrail],
+    model_settings=ModelSettings(tool_choice="required"),
 )
