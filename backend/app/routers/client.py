@@ -21,11 +21,12 @@ from agents import (
     trace,
 )
 from agents.mcp import MCPServer, MCPServerStreamableHttp
+from agents.extensions.visualization import draw_graph
 
 from tools.idea_generation.material_idea_agent import material_agent, MaterialInsightPoint, MaterialInsights, Analysis
 from tools.idea_generation.text_idea_agent import text_agent, SearchIdea, SearchIdeas
 
-from tools.research.web_search_agent import web_search_agent
+from tools.web_search.web_search_agent import web_search_agent
 
 from tools.report_generation.writer_agent import writer_agent, Report
 from tools.report_generation.verifier_agent import verifier_agent
@@ -129,6 +130,18 @@ class ShinanMaterialIntelligence:
     def __init__(self, context: ShinanContext) -> None:
         self.context = context
 
+    async def _generate_search_ideas_material(self, material: list[dict], idea_agent: Agent) -> Analysis:
+        try:
+            result = await Runner.run(idea_agent, material, context=self.context)
+            return result.final_output_as(Analysis)
+
+        except InputGuardrailTripwireTriggered as e:
+            print(f"Input guardrail triggered: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail="The provided material contains sensitive content that cannot be processed. Please review and remove any sensitive information before resubmitting."
+            )
+
     async def run_upload(self, material: list[dict]) -> str:
         trace_id = gen_trace_id()
         with trace("Shinan Intelligence Material Workflow", trace_id=trace_id):
@@ -144,18 +157,6 @@ class ShinanMaterialIntelligence:
             report: Report = await self._generate_report(search_results=articles, material_analysis=insights)
 
         return str(report.report)
-
-    async def _generate_search_ideas_material(self, material: list[dict], idea_agent: Agent) -> Analysis:
-        try:
-            result = await Runner.run(idea_agent, material, context=self.context)
-            return result.final_output_as(Analysis)
-
-        except InputGuardrailTripwireTriggered as e:
-            print(f"Input guardrail triggered: {e}")
-            raise HTTPException(
-                status_code=400,
-                detail="The provided material contains sensitive content that cannot be processed. Please review and remove any sensitive information before resubmitting."
-            )
 
     async def _search(self, idea: SearchIdea) -> str | None:
         """Search the web for a given idea."""
@@ -371,6 +372,7 @@ async def run_query(request: ShinanQuery):
 
     try:
         result = await manager.run_query(request.query)
+
         return {"result": result}
 
     except Exception as e:

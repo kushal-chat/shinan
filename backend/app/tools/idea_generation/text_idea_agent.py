@@ -24,6 +24,8 @@ class SearchIdeas(BaseModel):
     """A list of search ideas."""
     ideas: Sequence[SearchIdea]
 
+prompt = Prompt().text_prompt
+
 @function_tool
 def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
     """
@@ -31,8 +33,6 @@ def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
     Returns: context.
     """
     return ctx.context.company, ctx.context.role, ctx.context.interests
-
-prompt = Prompt().text_prompt
 
 text_agent = Agent[ShinanContext](
     name="TextAgent",
