@@ -55,11 +55,11 @@ def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
     """
     return ctx.context.company, ctx.context.role, ctx.context.interests
 
-prompt = Prompt().material_prompt
+SEARCH_PROMPT = Prompt().get_material_prompt()
 
 material_agent = Agent[ShinanContext](
     name="MaterialAgent",
-    instructions=prompt,
+    instructions=SEARCH_PROMPT,
     model="o4-mini", # Note that o3-mini does not accept images.
     output_type=Analysis,
     tools=[context_tool],

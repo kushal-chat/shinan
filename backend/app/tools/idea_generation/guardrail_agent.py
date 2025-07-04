@@ -3,7 +3,7 @@ from agents.run_context import RunContextWrapper
 from pydantic import BaseModel
 from ..prompts import Prompt
 
-GUARDRAIL_PROMPT = Prompt().guardrail_prompt
+GUARDRAIL_PROMPT = Prompt().get_guardrail_prompt()
 
 class IsSensitive(BaseModel):
     is_sensitive: bool

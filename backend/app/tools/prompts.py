@@ -13,13 +13,13 @@ class Prompt:
         self.writer_prompt = self.get_writer_prompt()
         self.triage_prompt = self.get_triage_prompt()
         self.clarification_prompt = self.get_clarification_prompt()
-        self.deep_research_prompt = self.get_deep_research_prompt()
+        self.instruction_prompt = self.get_deep_research_instruction_prompt()
     
-    def get_deep_research_prompt(self):
+    def get_deep_research_instruction_prompt(self):
         """
         Get the deep research prompt.
         """
-        DEEP_RESEARCH_PROMPT = """
+        RESEARCH_INSTRUCTION_AGENT_PROMPT = ("""
         Based on the following guidelines, take the user's query and rewrite it into detailed research instructions. OUTPUT ONLY THE RESEARCH INSTRUCTIONS, NOTHING ELSE. Transfer to the research agent.
 
         GUIDELINES:
@@ -62,7 +62,8 @@ class Prompt:
         IMPORTANT: Ensure that the complete payload to this function is valid JSON.
         IMPORTANT: SPECIFY REQUIRED OUTPUT LANGUAGE IN THE PROMPT.
         """
-        return DEEP_RESEARCH_PROMPT
+        )
+        return RESEARCH_INSTRUCTION_AGENT_PROMPT
 
     def get_triage_prompt(self):
         """

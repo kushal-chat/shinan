@@ -1,26 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --background: rgb(255,255,255);
+  --foreground: rgb(0, 0, 0);
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: 'Noto Serif JP', serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #18191a;
     --foreground: #ededed;
   }
 }
 
 body {
-  font-family: 'Segoe UI', 'Noto Sans JP', 'Hiragino Sans', 'Meiryo', sans-serif;
-  background: #e6f9ed;
-  color: #1a3d2f;
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.shinan-kanji {
+  font-family: var(--font-serif), 'Source Han Serif', serif;
+  font-weight: 900;
+  letter-spacing: 2px;
+  font-size: 2.5rem;
+  color: #232323;
+  text-shadow: 0 2px 8px rgba(0,0,0, 0.2);
+}
+
+.chatbot-container {
+  margin: 1in auto;
+  background: #ededed;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.55s cubic-bezier(0.25, 0.1, 0.25, 1);
 }

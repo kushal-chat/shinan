@@ -24,7 +24,7 @@ class SearchIdeas(BaseModel):
     """A list of search ideas."""
     ideas: Sequence[SearchIdea]
 
-prompt = Prompt().text_prompt
+SEARCH_PROMPT = Prompt().get_text_prompt()
 
 @function_tool
 def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
@@ -36,7 +36,7 @@ def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
 
 text_agent = Agent[ShinanContext](
     name="TextAgent",
-    instructions=prompt,
+    instructions=SEARCH_PROMPT,
     model="o3-mini", # Note that o3-mini does not accept images.
     output_type=SearchIdeas,
     tools=[context_tool],

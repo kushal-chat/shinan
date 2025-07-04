@@ -14,19 +14,21 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="shinan-body" style={{ minHeight: "100vh", margin: 0 }}>
-        <div style={{
-          position: "fixed",
-          top: 24,
-          left: 32,
-          zIndex: 100,
-          fontSize: 32,
-          fontWeight: 900,
-          color: "#1a3d2f",
-          letterSpacing: 2,
-          fontFamily: "Noto Sans JP, Segoe UI, Hiragino Sans, Meiryo, sans-serif",
-          userSelect: "none",
-          textShadow: "0 2px 8px rgba(0,0,0,0.08)"
-        }}>
+        <div
+          className="shinan-kanji"
+          style={{
+            position: "fixed",
+            top: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 100,
+            userSelect: "none",
+            background: "rgb(255,255,255)",
+            border: "3px solid black",
+            borderRadius: "16px",
+            padding: "0px 12px",
+          }}
+        >
           指南
         </div>
         {children}

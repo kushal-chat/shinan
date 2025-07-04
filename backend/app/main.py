@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.root import router as root_router
-from routers.file_upload import router as file_upload_router
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -20,7 +19,6 @@ app.add_middleware(
 )
 
 app.include_router(root_router)
-app.include_router(file_upload_router)
 
 @app.get("/")
 async def read_root():

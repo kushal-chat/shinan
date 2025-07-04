@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.6",
     "framer-motion": "^12.19.1",
     "next": "15.3.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "sonner": "^2.0.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

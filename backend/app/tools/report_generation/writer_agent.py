@@ -1,12 +1,9 @@
-from agents import Agent
+from agents import Agent, WebSearchTool
 from pydantic import BaseModel
 from context import ShinanContext
 from ..prompts import Prompt
 
-PROMPT = (
-    "You are a financial research summary writer. Given a query and a list of search results, "
-    "Give a single sentence summary report."
-)
+WRITER_INSTRUCTIONS = Prompt().get_writer_prompt()
 
 class Report(BaseModel):
     """A financial research summary."""
@@ -15,8 +12,8 @@ class Report(BaseModel):
 
 writer_agent = Agent[ShinanContext](
     name="WriterAgent",
-    instructions=Prompt().writer_prompt,
-    model="o3-mini",
+    instructions=WRITER_INSTRUCTIONS,
+    model="o4-mini", # Can change this to deep research?
+    tools=[WebSearchTool()],
     output_type=Report,
-    tool_use_behavior='run_llm_again'
 )
