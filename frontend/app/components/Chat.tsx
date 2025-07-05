@@ -49,9 +49,9 @@ const Chat: React.FC<ChatProps> = ({ shinanContext }) => {
   
     try {
   
-      const res = await fetch("http://localhost:8000/client/query", {
+      const res = await fetch("http://localhost:8000/client/deep_research", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json"}, // "Accepts": "text/event-stream" 
         body: JSON.stringify({ query: userInput }),
       });
   

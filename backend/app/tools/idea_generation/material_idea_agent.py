@@ -7,7 +7,7 @@ from agents import (
 from .guardrail_agent import sensitive_guardrail
 from pydantic import BaseModel
 from typing import Sequence
-from context import ShinanContext
+from context import ShinanContext, context_tool
 from ..prompts import Prompt
 
 class SearchIdea(BaseModel):
@@ -46,14 +46,6 @@ class Analysis(BaseModel):
     """A list of search ideas and material analysis points."""
     ideas: SearchIdeas
     insights: MaterialInsights
-
-@function_tool
-def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
-    """
-    Test to retrieve the current agent context to enable informed decision-making and maintain operational awareness. 
-    Returns: context.
-    """
-    return ctx.context.company, ctx.context.role, ctx.context.interests
 
 SEARCH_PROMPT = Prompt().get_material_prompt()
 

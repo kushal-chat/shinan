@@ -1,3 +1,4 @@
+from ast import Tuple
 import asyncio
 import base64
 import io
@@ -31,6 +32,7 @@ from agents import (
     HandoffOutputItem,
     ToolCallOutputItem,
 )
+from agents.mcp import MCPServer, MCPServerSse
 from agents.extensions.visualization import draw_graph
 from agents.items import ItemHelpers, TResponse
 from tools.idea_generation.material_idea_agent import (
@@ -45,7 +47,7 @@ from tools.idea_generation.text_idea_agent import (
     SearchIdeas,
 )
 from tools.idea_generation.deep_research_agents import (
-    assistant_agent, instruction_agent, clarifying_agent, triage_agent
+    intro_phrases, triage_agent
 )
 
 from tools.research.web_search_agent import web_search_agent
@@ -54,6 +56,7 @@ from tools.report_generation.verifier_agent import verifier_agent
 from tools.simple.simple_agent import simple_agent, Response
 
 from context import ShinanContext
+import random
 
 router = APIRouter(prefix="/client", tags=["client"])
 
@@ -122,29 +125,70 @@ class ShinanTextIntelligence:
         """
         self.session.set_input_items([{"content": query, "role": "user"}])
 
+        # TODO: MCP Server SSE for future development.
+        # async with MCPServerSse(
+        #     name="File Search Server",
+        #     params={
+        #         "url": "http://0.0.0.0:8000",
+        #     },
+        # ) as server:
         with trace("Shinan Text Intelligence Deep Research", group_id=self.group_id):
+            
+            current_agent = self.session.get_agent()
+            # TODO: Check if the agent has hosted MCP tools
+            # if hasattr(current_agent, 'tools') and any(isinstance(tool, HostedMCPTool) for tool in current_agent.tools):
+            #     current_agent = self.session.get_agent().clone(mcp_servers=[server])
+
             result = await Runner.run(
-                starting_agent=self.session.get_agent(), 
+                starting_agent=current_agent, 
                 input=self.session.get_input_items(),
-                context=self.context)
+                context=self.context
+            )
 
             for new_item in result.new_items:
                 agent_name = new_item.agent.name
 
                 if isinstance(new_item, MessageOutputItem):
-                    yield f"data: {agent_name}: {ItemHelpers.text_message_output(new_item)}\n\n"
+                    yield f"{agent_name}: {ItemHelpers.text_message_output(new_item)}\n\n"
                 elif isinstance(new_item, HandoffOutputItem):
-                    yield f"data: Handed off from {new_item.source_agent.name} to {new_item.target_agent.name}\n\n"
+                    yield f"Handed off from {new_item.source_agent.name} to {new_item.target_agent.name}\n\n"
                 elif isinstance(new_item, ToolCallItem):
-                    yield f"data: {agent_name}: Calling a tool\n\n"
+                    yield f"{agent_name}: Calling a tool\n\n"
                 elif isinstance(new_item, ToolCallOutputItem):
-                    yield f"data: {agent_name}: Tool call output: {new_item.output}\n\n"
+                    yield f"{agent_name}: Tool call output: {new_item.output}\n\n"
                 else:
-                    yield f"data: {agent_name}: Skipping item: {new_item.__class__.__name__}\n\n"
+                    yield f"{agent_name}: Skipping item: {new_item.__class__.__name__}\n\n"
 
-                if agent_name == "Research Agent":
-                    graph_data = draw_graph(self.session.get_agent(index=0))
-                    yield f"data: graph: {json.dumps(graph_data)}\n\n"
+                # TODO: Fix outputs on screen.
+                # """ 
+                # Checking user context and company information for personalized response 
+                # """
+                # if agent_name == "Clarifying Questions Agent" and isinstance(new_item, ToolCallOutputItem):
+                #     company, role, interests_str = new_item.output
+                #     formatted_msg = f"I see you're a {role} at {company} working with {interests_str}. Thank you for using our service! I'll help you out."
+                #     # yield f"{agent_name}: {formatted_msg}\n\n"
+
+                # """ 
+                # Asking clarifying questions as necessary.
+                # """
+                # if isinstance(new_item, MessageOutputItem):
+                #     text_output = ItemHelpers.text_message_output(new_item)
+
+                #     questions = json.loads(text_output)["questions"]
+                #     intro = random.choice(intro_phrases)
+                #     formatted_msg = f"{intro}:\n\n"
+                #     for question in questions:
+                #         formatted_msg += f"• {question}\n"
+                    
+                #     # yield f"{formatted_msg}"
+
+
+                # if (agent_name == "Clarifying Questions Agent" or agent_name == "Triage Agent") and isinstance(new_item, HandoffOutputItem):
+                #     # yield f"Understood. I'll hand this over to our {new_item.target_agent.name}.\n"
+
+                # # if agent_name == "Research Agent":
+                #     # graph_data = draw_graph(self.session.get_agent(index=0))
+                #     # yield f"graph: {json.dumps(graph_data)}\n\n"
 
         # Update session state
         self.session.set_input_items(result.to_input_list())
@@ -451,7 +495,7 @@ async def run_query(
 
     try:
         result = manager.run_query(request.query)
-        return StreamingResponse(result, media_type="application/json")
+        return StreamingResponse(result, media_type="text/event-stream")
 
     except asyncio.exceptions.CancelledError:
         return {"result": "Stopped"}

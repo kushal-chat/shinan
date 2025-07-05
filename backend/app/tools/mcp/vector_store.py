@@ -174,7 +174,6 @@ def create_server():
 
     return mcp
 
-
 def main():
     """Main function to start the MCP server."""
     # Verify OpenAI client is initialized
