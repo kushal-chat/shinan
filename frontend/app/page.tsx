@@ -10,6 +10,144 @@ interface Message {
   text: string;
 }
 
+function SettingsModal({
+  open,
+  onClose,
+  chatMode,
+  setChatMode,
+  context,
+  onUpdateContext,
+}: {
+  open: boolean;
+  onClose: () => void;
+  chatMode: "old" | "new";
+  setChatMode: (mode: "old" | "new") => void;
+  context: { company: string; role: string; interests: string[] } | null;
+  onUpdateContext: (context: { company: string; role: string; interests: string[] }) => void;
+}) {
+  const [company, setCompany] = useState(context?.company || "");
+  const [role, setRole] = useState(context?.role || "");
+  const [interests, setInterests] = useState(context?.interests?.join(", ") || "");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setCompany(context?.company || "");
+    setRole(context?.role || "");
+    setInterests(context?.interests?.join(", ") || "");
+  }, [context, open]);
+
+  if (!open) return null;
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      zIndex: 2000,
+      background: "rgba(0,0,0,0.18)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }}>
+      <div style={{
+        background: "#fff",
+        borderRadius: 12,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+        padding: 32,
+        minWidth: 340,
+        display: "flex",
+        flexDirection: "column",
+        gap: 18,
+        alignItems: "center",
+        color: "#232323",
+        position: "relative"
+      }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 22, cursor: "pointer" }}>&times;</button>
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Settings</div>
+        <div style={{ width: "100%", marginBottom: 8 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Chat Mode</div>
+          <label style={{ marginRight: 16 }}>
+            <input
+              type="radio"
+              checked={chatMode === "old"}
+              onChange={() => setChatMode("old")}
+              style={{ marginRight: 4 }}
+            />
+            Old Version (Query)
+          </label>
+          <label>
+            <input
+              type="radio"
+              checked={chatMode === "new"}
+              onChange={() => setChatMode("new")}
+              style={{ marginRight: 4 }}
+            />
+            New Version (Deep Research)
+          </label>
+        </div>
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            if (!company.trim() || !role.trim() || !interests.trim()) {
+              setError("Please fill in all fields.");
+              return;
+            }
+            setError("");
+            onUpdateContext({
+              company: company.trim(),
+              role: role.trim(),
+              interests: interests.split(",").map(i => i.trim()).filter(Boolean),
+            });
+            onClose();
+          }}
+          style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Current Context</div>
+          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>Company</label>
+          <input
+            value={company}
+            onChange={e => setCompany(e.target.value)}
+            placeholder="Company"
+            style={{ width: "100%", borderRadius: 8, border: "1px solid #e5e7eb", padding: 10, fontSize: 15, color: "#232323" }}
+          />
+          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>Role</label>
+          <input
+            value={role}
+            onChange={e => setRole(e.target.value)}
+            placeholder="Role"
+            style={{ width: "100%", borderRadius: 8, border: "1px solid #e5e7eb", padding: 10, fontSize: 15, color: "#232323" }}
+          />
+          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>Interests (comma separated)</label>
+          <input
+            value={interests}
+            onChange={e => setInterests(e.target.value)}
+            placeholder="Interests (comma separated)"
+            style={{ width: "100%", borderRadius: 8, border: "1px solid #e5e7eb", padding: 10, fontSize: 15, color: "#232323" }}
+          />
+          {error && <div style={{ color: "red", fontSize: 14 }}>{error}</div>}
+          <button
+            type="submit"
+            style={{
+              background: "#2563eb",
+              color: "#fff",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 24px",
+              fontWeight: 600,
+              fontSize: 15,
+              cursor: "pointer",
+              marginTop: 8
+            }}
+          >
+            Update Context
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [shinanContext, setShinanContext] = useState<{
     company: string;
@@ -19,6 +157,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"chat" | "upload">("chat");
   const chatRef = useRef<HTMLDivElement>(null);
   const [agentStep, setAgentStep] = useState<string | null>(null);
+  const [chatMode, setChatMode] = useState<"old" | "new">("new");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (chatRef.current) {
@@ -51,6 +191,22 @@ export default function Home() {
       justifyContent: "center",
       position: "relative"
     }}>
+      {/* Settings Button */}
+      <button
+        onClick={() => setSettingsOpen(true)}
+        style={{ position: "absolute", top: 24, right: 24, zIndex: 200, background: "#fff", border: "none", borderRadius: "50%", width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", cursor: "pointer", fontSize: 24 }}
+        aria-label="Settings"
+      >
+        <span role="img" aria-label="settings">⚙️</span>
+      </button>
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        chatMode={chatMode}
+        setChatMode={setChatMode}
+        context={shinanContext}
+        onUpdateContext={handleSetContext}
+      />
       {/* Context Prompt */}
       <AnimatePresence>
         {!shinanContext && (
@@ -72,7 +228,6 @@ export default function Home() {
               display: "flex",
               background: "#ededed",
               overflow: "hidden",
-              
             }}
           >
             <div
@@ -88,7 +243,7 @@ export default function Home() {
             >
               <AnimatePresence mode="wait">
                 {activeTab === "chat" ? (
-                  <Chat shinanContext={shinanContext} />
+                  <Chat shinanContext={shinanContext} mode={chatMode} />
                 ) : (
                   <motion.div
                     key="upload"

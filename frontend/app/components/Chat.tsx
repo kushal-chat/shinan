@@ -15,9 +15,10 @@ interface ChatProps {
     role: string;
     interests: string[];
   } | null;
+  mode?: "old" | "new";
 }
 
-const Chat: React.FC<ChatProps> = ({ shinanContext }) => {
+const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,10 +49,13 @@ const Chat: React.FC<ChatProps> = ({ shinanContext }) => {
     }, 100);
   
     try {
-  
-      const res = await fetch("http://localhost:8000/client/deep_research", {
+      const endpoint =
+        mode === "old"
+          ? "http://localhost:8000/client/query"
+          : "http://localhost:8000/client/deep_research";
+      const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json"}, // "Accepts": "text/event-stream" 
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: userInput }),
       });
   
@@ -181,6 +185,16 @@ const Chat: React.FC<ChatProps> = ({ shinanContext }) => {
           borderBottomRightRadius: 24,
         }}
       >
+
+        {/* <div style={{ width: '100%', marginBottom: 6, zIndex: 2, position: 'relative', color: '#555', fontSize: 14 }}>
+          {shinanContext && (
+            <span>
+              Your context: <b>Company:</b> {shinanContext.company}, <b>Role:</b> {shinanContext.role}, <b>Interests:</b> {shinanContext.interests.join(', ')}
+            </span>
+          )}
+        </div> 
+        <div> */}
+
         {/* Input */}
         <input
           type="text"
@@ -287,11 +301,13 @@ const Chat: React.FC<ChatProps> = ({ shinanContext }) => {
             "Send"
           )}
         </motion.button>
+        {/* </div> */}
       </form>
 
       {/* Error */}
       {error && <div style={{ color: "#e74c3c", margin: 8, textAlign: "center" }}>{error}</div>}
     </motion.div>
+    
   );
 };
 

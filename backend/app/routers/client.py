@@ -491,11 +491,11 @@ async def run_query(
     """
     Main endpoint to process queries in a text format.
     """
-    manager = ShinanTextIntelligence(session=session)
+    manager = ShinanTextIntelligence(session=session, conversation_id = uuid.uuid4().hex[:16])
 
     try:
         result = manager.run_query(request.query)
-        return StreamingResponse(result, media_type="text/event-stream")
+        return StreamingResponse(result, media_type="application/json")
 
     except asyncio.exceptions.CancelledError:
         return {"result": "Stopped"}
