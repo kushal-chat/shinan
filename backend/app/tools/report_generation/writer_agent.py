@@ -20,22 +20,7 @@ class Report(BaseModel):
     report: str
     """The report content."""
 
-@function_tool
-def softbank_blogs() -> str:
-    search_endpoint = "https://www.softbank.jp/sbnews"
-
-    response = requests.get(search_endpoint)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    items = soup.select('li.urllist-item.recent-entries-item')
-    blogs = ""
-
-    for item in items:
-        title_tag = item.select_one('a.urllist-title-link')
-        title = title_tag.text.strip() if title_tag else 'No title'
-        article_url = title_tag['href'] if title_tag else 'No URL'
-        blogs+=(f"Title: {title}, URL: {article_url}\n")
-
-    return blogs
+instructions_with_blogs = WRITER_INSTRUCTIONS
 
 writer_agent = Agent[ShinanContext](
     name="WriterAgent",
@@ -43,9 +28,8 @@ writer_agent = Agent[ShinanContext](
     model="o4-mini", 
     tools=[
         WebSearchTool(),
-        softbank_blogs
     ],
-    output_type=Report,
+    output_type=str,
 )
 
 deep_research_agent = Agent[ShinanContext](
@@ -63,5 +47,5 @@ deep_research_agent = Agent[ShinanContext](
             }
         )
     ],
-    output_type=Report,
+    output_type=str,
 )

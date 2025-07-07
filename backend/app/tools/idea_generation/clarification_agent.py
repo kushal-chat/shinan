@@ -16,17 +16,6 @@ from context import ShinanContext, context_tool
 prompts = Prompt()
 CLARIFICATION_PROMPT = prompts.get_clarification_prompt()
 
-intro_phrases = [
-    "I have a few questions to clarify",
-    "I wanted to make sure we're on the same page",
-    "Let me ask a few questions to better understand",
-    "I'd like to clarify a few things",
-    "To give you the best help, I need to understand a bit more",
-    "Let me gather some details to assist you better",
-    "I want to make sure I understand your needs correctly",
-    "A few quick questions to point me in the right direction"
-]
-
 clarification_agent = Agent[ShinanContext](
     name = "Clarifier",
     instructions=prompt_with_handoff_instructions(CLARIFICATION_PROMPT),

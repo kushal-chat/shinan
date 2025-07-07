@@ -1,3 +1,6 @@
+import requests
+from bs4 import BeautifulSoup
+
 class Prompt:
     """
     A class that contains all the prompts for the agents.
@@ -126,7 +129,7 @@ class Prompt:
             """
         You are an expert research analyst who specializes in extracting actionable insights from textual content and identifying strategic research opportunities.
 
-        Your task is to analyze the provided text content and generate 3-5 strategic search ideas that would provide additional valuable insights or validate key findings.
+        Your task is to analyze the provided text content and generate 2-3 strategic search ideas that would provide additional valuable insights or validate key findings.
 
         ANALYSIS APPROACH:
         1. **FIRST: Use the context retrieval tool to understand the source, purpose, and background of this text**
@@ -145,7 +148,7 @@ class Prompt:
         - Avoid redundant searches for information already comprehensively covered in the text
 
         OUTPUT FORMAT:
-        Generate exactly 3-5 search ideas using this format:
+        Generate exactly 2-3 search ideas using this format:
         - Query: <specific, actionable search term or phrase>
         - Reason: <clear explanation of why this search would be valuable and how it connects to the text's content>
 
@@ -165,31 +168,41 @@ class Prompt:
         )
         return TEXT_PROMPT
     
-    def get_web_search_prompt(self):
+    def softbank_blogs(self) -> str:
+        search_endpoint = "https://www.softbank.jp/sbnews"
+
+        response = requests.get(search_endpoint)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        items = soup.select('li.urllist-item.recent-entries-item')
+        blogs = ""
+
+        for item in items:
+            title_tag = item.select_one('a.urllist-title-link')
+            title = title_tag.text.strip() if title_tag else 'No title'
+            article_url = title_tag['href'] if title_tag else 'No URL'
+            blogs+=(f"Title: {title}, URL: {article_url}\n")
+
+        return blogs
+
+    def get_web_search_prompt(self) -> str:
         """
-        Get the web search prompt.
+        Get the web search prompt using Chain-of-Thought reasoning.
         """
-        WEB_SEARCH_PROMPT = (
+        WEB_SEARCH_PROMPT = f"""
+            Search for useful information to the person's context and to the individual's query.
+            First, think carefully step by step about what searches are needed to answer the query.  
+
+            Use the **WebSearch** tool to collect timely, contextual information:
+            - Articles from newspapers or trusted outlets.
+            - Additional blog posts from SoftBank’s website.
+            - Broader industry news relevant to SoftBank’s moves.
+
+            Here are a few Softbank blogs. Search the 2 top most relevant.
+            {self.softbank_blogs()}
+
+            Next, search 2 or 3 others that are most relevant from web_search_preview.
             """
-            You are a research assistant helping users learn what a company is doing, how it is being discussed, and what recent developments are emerging.
-
-            CONTEXT MATTERS:
-            - Be grounded in the provided context (company, role, interests)
-            - Avoid surface-level summaries — aim for depth and relevance
-
-            FOCUS AREAS:
-            - New updates, launches, or changes involving the company
-            - Mentions in blogs, news articles, filings, or community forums
-            - Public perception, reactions, or expert commentary
-            - Strategic moves: partnerships, hires, funding, pivots, etc.
-
-            PRIORITIZE:
-            - Recent and emerging content (last 6–12 months)
-            - Independent and third-party sources over promotional material
-            - Insightful or potentially overlooked mentions
-
-            """
-        )
+        
         return WEB_SEARCH_PROMPT
 
     def get_verifier_prompt(self):
@@ -210,29 +223,16 @@ class Prompt:
         Get the writer prompt.
         """
         WRITER_PROMPT = ("""
-            You are an expert research writer. Your task is to synthesize recent developments related to SoftBank using the tools provided. Your report should help the user quickly understand current priorities, strategies, and developments relevant to the company.
+            You are a friendly assistant in helping someone learn more about companies, initiatives and their interests.
+            Your task is to synthesize recent developments related to SoftBank using the tools provided. 
+            Your report should help the user quickly understand current priorities, strategies, and developments relevant to the company.
+            Your report should demonstrate conciseness and an understanding of releases that would otherwise be exceedingly difficult to discover.
+            It should be three paragraphs, and be well structured. 
+            This will be shown as an HTML file! Use bolds, italics, and links to citations. Do not use **,  citeturn0search3turn0news12, etc.
 
-            Follow these steps in EXACTLY this order:
+            You have only two turns to search. You MUST NOT go over two turns.
 
-            1. FIRST, use the **SoftBankBlogs** tool to find SoftBank-related blog pages. 
-            - ⚠️ IMPORTANT: Only call this tool ONCE — its output is static and does not change. It is not a searcher!
-
-            2. SECOND, use the **MCP tool** to SEARCH and extract key insights from SoftBank’s **official strategy PDFs, financial reports, and internal documents**. Prioritize concrete information (e.g., earnings, strategic shifts, investment trends).
-
-            3. THIRD, use the **WebSearch** tool to SEARCH for timely, contextual information:
-            - Articles from newspapers or trusted outlets.
-            - Additional blog posts from SoftBank’s website.
-            - Broader industry news relevant to SoftBank’s moves.
-
-            4. FINALLY, write a short, informative, and well-structured **briefing report** with the following format:
-            - **Title**: A concise, informative headline.
-            - **Summary**: A few well-written paragraphs that synthesize the findings and highlight any key themes, trends, or implications.
-            - **HTML Format**: Do not add citations for MCP files. Use bold / italics. Mention sources explicitly throughout with links user can access.
-
-            TOOLS:
-            - Use **SoftBankBlogs** only once at the start. It is useless after.
-            - Use **MCP** to extract info from internal PDFs.
-            - Use **WebSearch** for broader or external context.
+            If your search is internal to Softbank --> use tool file_search and file_fetch.
         """
         )
         return WRITER_PROMPT

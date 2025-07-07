@@ -10,9 +10,11 @@ import base64
 import io
 import json
 import logging
+import os
 import random
+from token import OP
 import uuid
-from typing import Any, AsyncIterator, Dict, List, Sequence
+from typing import Any, AsyncIterator, Dict, List, Sequence, cast
 
 from agents import mcp
 import fitz
@@ -51,12 +53,12 @@ from openai.types.responses import (
     ResponseTextDeltaEvent,
 )
 from tools.idea_generation.material_idea_agent import (
-    Analysis,
-    MaterialInsightPoint,
-    MaterialInsights,
     MaterialSearchIdea,
     MaterialSearchIdeas,
-    material_agent,
+    MaterialInsightPoint,
+    MaterialInsights,
+    Analysis,
+    material_agent
 )
 from tools.idea_generation.text_idea_agent import (
     TextSearchIdea,
@@ -69,16 +71,15 @@ from tools.idea_generation.clarification_agent import (
 from tools.report_generation.verifier_agent import verifier_agent
 from tools.report_generation.writer_agent import Report, writer_agent, deep_research_agent
 from tools.research.search_agent import search_agent
-from tools.simple.simple_agent import Response, simple_agent
+from tools.messages.messages_agent import messages_agent
+
+from openai import OpenAI
 
 logger = logging.getLogger("openai.agents")
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler())
 
 router = APIRouter(prefix="/client", tags=["client"])
-
-# TODO: Implement Redis.
-# redis_client = Redis(host="localhost", port=6379, decode_responses=True)
 
 async def _context_relevance(run_result: RunResult) -> str:
     """Custom output extractor for sub‑agents that returns a Verification."""
@@ -91,13 +92,13 @@ class ShinanQuery(BaseModel):
     """A query to the Shinan client."""
     query: str
 
-# TODO: Will be shifted to Redis.
 class ShinanSessionManager:
     def __init__(self) -> None:
         # Session state initialization
         self.context : ShinanContext = ShinanContext(company="SoftBank", role="Intern", interests=["AI", "Strategy"])
         self.input_items : List[TResponseInputItem] = []
         self.agents : List[Agent[ShinanContext]] = []
+        self.group_id = uuid.uuid4().hex[:16]
 
         self.text_ideas: TextSearchIdeas = TextSearchIdeas(ideas=[])
         self.analysis: Analysis = Analysis(
@@ -172,69 +173,79 @@ class ShinanTextIntelligence:
     def context(self) -> ShinanContext:
         return self.session.get_context()
 
-    async def run_deep_research(self, request: ShinanQuery) -> AsyncIterator[str]:
-        with trace("Shinan Text Intelligence Deep Research"):
-            result = Runner.run_streamed(starting_agent=deep_research_agent, input=request.query)
-            async for ev in result.stream_events():
-                if ev.type == "run_item_stream_event":
-                    agent_name = getattr(ev.item.agent, "name", "Unknown Agent") if hasattr(ev.item, "agent") else "Unknown Agent"
+    async def run_deep_research(self, request: ShinanQuery):
+        system_message = """
+            You are a professional researcher preparing a helpful, data-driven note on a company's current events in line with the user's queries.
 
-                    if ev.item.type == "handoff_call_item":
-                        func_name = getattr(ev.item.raw_item, "name", "Unknown Function")
-                        yield (f"{count}. [{agent_name}] → Handoff Call: {func_name}")
-                        count += 1
+            Do:
+            - Focus on data-rich insights.
+            - When appropriate, summarize data in a way that could be turned into charts or tables, and call this out in the response.
+            - Prioritize reliable, up-to-date sources: blogs, articles, etc.
+            - Include inline citations and return all source metadata.
 
-                    elif ev.item.type == "handoff_output_item":
-                        yield (f"{count}. [{agent_name}] → Handoff Output")
-                        count += 1
+            Be analytical, avoid generalities, and ensure that each section is helpful to the user's queries.
+        """
 
-                    elif ev.item.type == "mcp_list_tools_item":
-                        yield (f"{count}. [{agent_name}] → mcp_list_tools_item")
-                        count += 1
+        client = OpenAI(api_key = os.environ.get("OPENAI_API_KEY"))
+        response = client.responses.create(
+            model="o3-deep-research",
+            input=[
+                {
+                "role": "developer",
+                "content": [
+                    {
+                    "type": "input_text",
+                    "text": system_message,
+                    }
+                ]
+                },
+                {
+                "role": "user",
+                "content": [
+                    {
+                    "type": "input_text",
+                    "text": request.query,
+                    }
+                ]
+                }
+            ],
+            reasoning={
+                "summary": "auto"
+            },
+            tools=[
+                {
+                "type": "web_search_preview"
+                },
+                {
+                "type": "mcp",
+                "server_label": "file_research",
+                "server_url": "https://localhost:8080/sse/",
+                "require_approval": "never"
+                }
+            ]
+        )
+        if response.output[-1].type == "invalid_invalid_request_error":
+            return "Due to verification constraints, this API call is currently unavailable."
+        if response.output[-1].type == "message":
+            for content in response.output[-1].content:
+                if content.type == "text":
+                    return content
 
-                    elif ev.item.type == "reasoning_item":
-                        yield (f"{count}. [{agent_name}] → Reasoning step")
-                        count += 1
+    async def run_messages(self, request: ShinanQuery) -> str:
+        self.session.add_input_items({"content": request.query, "role": "user"})
+        trace_id = gen_trace_id()
 
-                    elif ev.item.type == "tool_call_item":
-                        tool_name = getattr(ev.item.raw_item, "name", None)
-
-                        # Skip tool call if tool_name is missing or empty
-                        if not isinstance(tool_name, str) or not tool_name.strip():
-                            continue  # skip silently
-
-                        tool_name = tool_name.strip()
-
-                        args = getattr(ev.item.raw_item, "arguments", None)
-                        args_str = ""
-
-                        if args:
-                            try:
-                                parsed_args = json.loads(args)
-                                if parsed_args:
-                                    args_str = json.dumps(parsed_args)
-                            except Exception:
-                                if args.strip() and args.strip() != "{}":
-                                    args_str = args.strip()
-
-                        args_display = f" with args {args_str}" if args_str else ""
-
-                        yield (f"{count}. [{agent_name}] → Tool Call: {tool_name}{args_display}")
-                        count += 1
-
-                    elif ev.item.type == "message_output_item":
-                        yield (f"{count}. [{agent_name}] → Message Output")
-                        count += 1
-
-                    else:
-                        yield (f"{count}. [{agent_name}] → {ev.item.type}")
-                        count += 1
+        with trace("Shinan Intelligence Messaging", trace_id=trace_id, group_id=self.session.group_id):
+            result = await Runner.run(messages_agent, input=self.session.get_input_items(), context=self.session.get_context())
+        
+        self.session.add_input_items({"content": request.final_output(), "role": "bot"}) # type: ignore
+        return result.final_output()
 
     async def run_query(self, request: ShinanQuery) -> AsyncIterator[str]:
 
         self.session.set_input_items([{"content": request.query, "role": "user"}])
         trace_id = gen_trace_id()
-        with trace("Shinan Intelligence Text Workflow", trace_id=trace_id):
+        with trace("Shinan Intelligence Text Workflow", trace_id=trace_id, group_id=self.session.group_id):
             
             # Generating search ideas 
             ideas_generator = self._generate_search_ideas(request.query, text_agent)
@@ -342,7 +353,7 @@ class ShinanTextIntelligence:
         try:
             async with MCPServerSse(name="Shinan MCP Vector Store", params={"url": "http://localhost:8080/sse"}) as mcp_server:
                 search_mcp_agent = search_agent.clone(mcp_servers=[mcp_server])
-                result = Runner.run_streamed(search_agent, input_data, context=self.context)
+                result = Runner.run_streamed(search_agent, input_data, context=self.context, max_turns=1)
                 search_logger.debug(f"Search agent initialized for query: {idea.query}")
 
                 # Add citation
@@ -357,18 +368,13 @@ class ShinanTextIntelligence:
 
                                 if ev.item.raw_item.action.type == "search":
                                     search_logger.debug(f"Searching the web for: {ev.item.raw_item.action.query}")
-                                    yield f"UPDATE Searching the web for {ev.item.raw_item.action.query}..." 
+                                    yield f"UPDATE Searching the web for {idea.query}..." 
                                     await asyncio.sleep(1.0)
 
-                                elif ev.item.raw_item.action.type == "open_page":
-                                    search_logger.debug(f"Found website: {ev.item.raw_item.action.url}")
-                                    yield f"UPDATE Found this website at <link>{ev.item.raw_item.action.url}</link>. Opening it..."
-                                    await asyncio.sleep(1.0)
-
-                            elif ev.item.raw_item.type == "function_call":
-                                search_logger.debug(" MCP to access a vector store of SoftBank reports")
-                                yield f"UPDATE Using MCP to access a vector store of SoftBank reports..."
-                                await asyncio.sleep(1.0)
+                                # elif ev.item.raw_item.action.type == "open_page":
+                                #     search_logger.debug(f"Found website: {ev.item.raw_item.action.url}")
+                                #     yield f"UPDATE Found this website at <link>{ev.item.raw_item.action.url}</link>. Opening it..."
+                                #     await asyncio.sleep(1.0)
 
                         elif ev.item.type == "message_output_item":
                             search_logger.debug(f"Found {ev.item.raw_item}")
@@ -429,7 +435,7 @@ class ShinanTextIntelligence:
                 await asyncio.gather(*tasks, return_exceptions=True)
                 search_logger.info("All tasks gathered. Search workflow completed.")
 
-        yield "I have all the information I need. I am going to do my final research now."
+        yield "I have all the information I need. Now I'll analyze my vector store of Softbank public intelligence!"
 
     async def _generate_report(self, query: str, search_results: List[str], is_deep_research: bool = False) -> AsyncIterator[str]:
         """Generate a report from a query and search results."""
@@ -448,6 +454,7 @@ class ShinanTextIntelligence:
             result = Runner.run_streamed(writer_mcp_agent, input=self.session.get_input_items(), context=self.context)
             async for ev in result.stream_events():
                 if ev.type == "run_item_stream_event":
+                    print(ev.item.type)
 
                     if ev.item.type == "tool_call_item":
                         report_logger.debug(f"Processing run_item_stream_event: {ev.item.raw_item.type}")
@@ -460,22 +467,16 @@ class ShinanTextIntelligence:
                                 yield f"UPDATE Searching the web for {ev.item.raw_item.action.query}..." 
                                 await asyncio.sleep(1.0)
 
-                            elif ev.item.raw_item.action.type == "open_page":
-                                report_logger.debug(f"Found website: {ev.item.raw_item.action.url}")
-                                yield f"UPDATE Found this website at <link>{ev.item.raw_item.action.url}</link>. Opening it..."
-                                await asyncio.sleep(1.0)
-
                         elif ev.item.raw_item.type == "function_call":
                             report_logger.debug(" MCP to access a vector store of SoftBank reports")
-                            yield f"UPDATE Using MCP to access a vector store of SoftBank reports..."
+                            yield f"UPDATE Queried MCP to search a vector store of Softbank public files..."
                             await asyncio.sleep(1.0)
 
-                report = result.final_output_as(Report)
-                try:
-                    yield str(report.report)
-                    self.session.set_report(report)
-                except AttributeError as e:
-                    pass
+                    if ev.item.type == "message_output_item":
+                        yield ("UPDATE Here's your report!")
+                        await asyncio.sleep(1.0)
+
+                        yield str(ItemHelpers.text_message_output(ev.item))
 
 class ShinanMaterialIntelligence:
     """A class that orchestrates the material-based flow of Shinan Intelligence."""
@@ -487,41 +488,26 @@ class ShinanMaterialIntelligence:
     def context(self) -> ShinanContext:
         return self.session.get_context()
 
-    async def run_upload(self, material: list[TResponseInputItem]) -> AsyncIterator[str]:
-
-        self.session.set_input_items([])
-
+    async def run_upload(self, material: list[TResponseInputItem]) -> str:
         trace_id = gen_trace_id()
-        with trace("Shinan Intelligence Material Workflow", trace_id=trace_id):
-            
-            """Generating analysis"""
-            analysis_generator = self._generate_search_ideas_material(material, material_agent)
-            async for ev in analysis_generator:
-                yield ev
-
-            analysis = self.session.analysis
+        with trace("Shinan Intelligence Material Workflow", trace_id=trace_id, group_id=self.session.group_id):
+            # Generate search ideas and material analysis
+            analysis: Analysis = await self._generate_search_ideas_material(material, material_agent)
             ideas : MaterialSearchIdeas = analysis.ideas
             insights : MaterialInsights = analysis.insights
 
-            # ideas = self.session.get_input_items()
-            # logger.info("Ideas")
-            
-            # # Research web for search ideas
-            # articles: Sequence[str] = await self._research_web(ideas)
-            # yield "Researching those ideas now."
+            # Research web for search ideas
+            articles: List[str] = await self._research_web(ideas)
 
-            # # Generate report
-            # report: Report = await self._generate_report(search_results=articles, material_analysis=insights)
-            # yield f"{str(report.report)}"
+            # Generate report
+            report: str = await self._generate_report(search_results=articles, material_analysis=insights)
 
-    async def _generate_search_ideas_material(self, material: list[TResponseInputItem], idea_agent: Agent) -> AsyncIterator[str]:
+        return report
 
+    async def _generate_search_ideas_material(self, material: list[TResponseInputItem], idea_agent: Agent) -> Analysis:
         try:
-            result = Runner.run_streamed(
-                starting_agent=idea_agent, 
-                input=material, 
-                context=self.context
-            )
+            result = await Runner.run(idea_agent, material, context=self.context)
+            return result.final_output_as(Analysis)
 
         except InputGuardrailTripwireTriggered as e:
             print(f"Input guardrail triggered: {e}")
@@ -529,59 +515,6 @@ class ShinanMaterialIntelligence:
                 status_code=400,
                 detail="The provided material contains sensitive content that cannot be processed. Please review and remove any sensitive information before resubmitting."
             )
-
-        except Exception as e:
-            logger.error(f"Failed to initialize Runner: {e}")
-            yield json.dumps({"error": "Failed to initialize search process"})
-            return
-        
-        context_message: str = ""
-        async for ev in result.stream_events():
-
-            if ev.type == "raw_response_event":
-                continue
-            elif ev.type == "run_item_stream_event":
-                if ev.item.type == "tool_call_output_item":
-                    """ 
-                    Checking user context and company information for personalized response 
-                    Yields: context_message
-                    """
-                    company, role, interests_str = ev.item.output
-                    if len(interests_str) > 1:
-                        interests_formatted = ", ".join(interests_str[:-1]) + f", and {interests_str[-1]}"
-                    else:
-                        interests_formatted = interests_str[0]
-                    context_message = f"I see your role is {role} at {company}, and your interests include {interests_formatted}. I'll try to make my responses meaningful!\n"
-                    yield context_message 
-                    logger.info(context_message)
-
-        analysis: Analysis = result.final_output
-        self.session.set_analysis(analysis)
-
-        search_ideas = analysis.ideas
-        ideas = search_ideas.model_dump()
-
-        # Use the parsed data directly (no need for json.loads)
-        # Format for sending as message
-        idea_message = "Here are the material ideas:\n\n"
-        for i, idea in enumerate(ideas['ideas'], 1):
-            idea_message += f"{i}. {idea['query']}\n"
-            idea_message += f"   Reasoning: {idea['reasoning']}\n\n"
-
-        yield idea_message
-
-        search_insights = analysis.insights
-        insights = search_insights.model_dump()
-
-        insight_message = "Here are the material insights:\n\n"
-        for i, insight in enumerate(insights['insights'], 1):
-            insight_message += f"{i}. {insight['material_analysis']}\n"
-            insight_message += f"{i}. {insight['point_of_interest']}\n"
-            insight_message += f"   Reasoning: {insight['reasoning']}\n\n"
-
-        yield insight_message
-
-        self.session.set_input_items(result.to_input_list())
 
     async def _search(self, idea: MaterialSearchIdea) -> str | None:
         """Search the web for a given idea."""
@@ -595,7 +528,7 @@ class ShinanMaterialIntelligence:
             print(f"Search failed for {idea.query}: {e}")
             return None
 
-    async def _research_web(self, search_ideas: MaterialSearchIdeas) -> Sequence[str]:
+    async def _research_web(self, search_ideas: MaterialSearchIdeas) -> List[str]:
         """Search the web for a given idea."""
 
         with custom_span("Search the web"):
@@ -609,7 +542,7 @@ class ShinanMaterialIntelligence:
                 num_completed += 1
             return results
 
-    async def _generate_report(self, search_results: Sequence[str], material_analysis: MaterialInsights) -> Report:
+    async def _generate_report(self, search_results: Sequence[str], material_analysis: MaterialInsights) -> str:
         """Generate a report from a query and search results."""
 
         verifier_tool = verifier_agent.as_tool(
@@ -619,8 +552,7 @@ class ShinanMaterialIntelligence:
         )
         writer_agent_with_verifier = writer_agent.clone(tools=[verifier_tool])
         result = await Runner.run(writer_agent_with_verifier, f"Material analysis: {material_analysis}\nSearch results: {search_results}", context=self.context)
-
-        return result.final_output_as(Report)
+        return result.final_output()
 
 session = ShinanSessionManager()
 
@@ -663,7 +595,7 @@ async def pdf_hybrid_to_material(upload_file: UploadFile, max_pages: int = 10) -
         page = pdf_document[page_num]
         
         # Extract text
-        text_content = page.get_text() # type: ignore
+        text_content = page.get_text() # type: ignore 
         if text_content.strip():
             content_parts.append({
                 "type": "input_text",
@@ -671,7 +603,7 @@ async def pdf_hybrid_to_material(upload_file: UploadFile, max_pages: int = 10) -
             })
         
         # Convert to image
-        pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))  # type: ignore
+        pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5)) # type: ignore 
         img_data = pix.tobytes("png")
         base64_image = base64.b64encode(img_data).decode('utf-8')
         
@@ -694,7 +626,7 @@ async def pdf_hybrid_to_material(upload_file: UploadFile, max_pages: int = 10) -
         }
     ]
 
-async def png_to_material(upload_file: UploadFile) -> List[Dict[str, Any]]:
+async def png_to_material(upload_file: UploadFile) -> list[TResponseInputItem]: 
     """
     Convert PNG to text (using OCR) and image for comprehensive analysis
     
@@ -761,12 +693,13 @@ async def png_to_material(upload_file: UploadFile) -> List[Dict[str, Any]]:
         "text": f"↑ Image Visual\n---\n"
     })
     
-    return [
+    raw_output = [
         {
             "role": "user",
             "content": content_parts
         }
-    ] 
+    ]
+    return raw_output # type: ignore
 
 ALLOWED_TYPES = {"application/pdf": pdf_hybrid_to_material, "image/png": png_to_material, }
 
@@ -780,9 +713,7 @@ async def set_context(context: ShinanContext):
     session.set_context(context)
 
 @router.post("/query")
-async def run_query(
-    request: ShinanQuery,
-):
+async def run_query(request: ShinanQuery):
     """
     Main endpoint to process queries in a text format.
     """
@@ -798,18 +729,33 @@ async def run_query(
     except Exception as e:
         return {"result": f"Error: {str(e)}"}
 
-@router.post("/deep_research")
-async def run_query_research(
-    request: ShinanQuery,
-):
+@router.post("/messaging")
+async def run_messages(request: ShinanQuery):
     """
-    Main endpoint to process queries in a text format via Deep Research.
+    Main endpoint to process queries in a text format.
+    """
+    manager = ShinanTextIntelligence(session=session)
+
+    try:
+        result = await manager.run_messages(request)
+        return result
+
+    except asyncio.exceptions.CancelledError:
+        return {"result": "Stopped"}
+        
+    except Exception as e:
+        return {"result": f"Error: {str(e)}"}
+
+@router.post("/deep_research")
+async def run_query_research(request: ShinanQuery):
+    """
+    Main endpoint to process queries in a text format via Deep Research API.
     """
     manager = ShinanTextIntelligence(session=session)
 
     try: 
-        stream = manager.run_deep_research(request)   
-        return StreamingResponse(stream, media_type="application/json")
+        stream = await manager.run_deep_research(request) 
+        return stream  
 
     except asyncio.exceptions.CancelledError:
         return {"result": "Stopped"}
@@ -818,21 +764,12 @@ async def run_query_research(
         return {"result": f"Error: {str(e)}"}
 
 @router.post("/upload")
-async def run_upload(
-    file: UploadFile = File(...), 
-):
+async def run_upload(file: UploadFile = File(...)):
     """
     Main endpoint to process queries in a PDF or PNG format.
     """
-    content_type = file.content_type
-    if not content_type:
-        raise HTTPException(
-            status_code=HTTP_400_BAD_REQUEST,
-            detail="File content type is missing."
-        )
-
     manager = ShinanMaterialIntelligence(session=session)
-
+    content_type = file.content_type or ""
     processor = ALLOWED_TYPES.get(content_type)
     if not processor:
         raise HTTPException(
@@ -841,6 +778,5 @@ async def run_upload(
         )
 
     material = await processor(file)
-    result = manager.run_upload(material)
-
-    return StreamingResponse(result, media_type="application/json")
+    result = await manager.run_upload(material)
+    return result

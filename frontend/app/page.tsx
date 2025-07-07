@@ -13,15 +13,11 @@ interface Message {
 function SettingsModal({
   open,
   onClose,
-  chatMode,
-  setChatMode,
   context,
   onUpdateContext,
 }: {
   open: boolean;
   onClose: () => void;
-  chatMode: "old" | "new";
-  setChatMode: (mode: "old" | "new") => void;
   context: { company: string; role: string; interests: string[] } | null;
   onUpdateContext: (context: { company: string; role: string; interests: string[] }) => void;
 }) {
@@ -65,27 +61,6 @@ function SettingsModal({
       }}>
         <button onClick={onClose} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 22, cursor: "pointer" }}>&times;</button>
         <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Settings</div>
-        <div style={{ width: "100%", marginBottom: 8 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Chat Mode</div>
-          <label style={{ marginRight: 16 }}>
-            <input
-              type="radio"
-              checked={chatMode === "old"}
-              onChange={() => setChatMode("old")}
-              style={{ marginRight: 4 }}
-            />
-            Deterministic
-          </label>
-          <label>
-            <input
-              type="radio"
-              checked={chatMode === "new"}
-              onChange={() => setChatMode("new")}
-              style={{ marginRight: 4 }}
-            />
-            Handoffs
-          </label>
-        </div>
         <form
           onSubmit={e => {
             e.preventDefault();
@@ -157,7 +132,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"chat" | "upload">("chat");
   const chatRef = useRef<HTMLDivElement>(null);
   const [agentStep, setAgentStep] = useState<string | null>(null);
-  const [chatMode, setChatMode] = useState<"old" | "new">("old");
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -202,8 +176,6 @@ export default function Home() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        chatMode={chatMode}
-        setChatMode={setChatMode}
         context={shinanContext}
         onUpdateContext={handleSetContext}
       />
@@ -243,7 +215,7 @@ export default function Home() {
             >
               <AnimatePresence mode="wait">
                 {activeTab === "chat" ? (
-                  <Chat shinanContext={shinanContext} mode={chatMode} />
+                  <Chat shinanContext={shinanContext} mode={"old"} />
                 ) : (
                   <motion.div
                     key="upload"

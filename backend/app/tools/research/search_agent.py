@@ -37,8 +37,8 @@ search_agent = Agent[ShinanContext](
     tools=[
         WebSearchTool(),
         # FileSearchTool(vector_store_ids=["vs_68642a4dab488191b7c7b089cf1abe3e"]),
-        softbank_blogs
     ],
+    model="gpt-4o-mini",
     model_settings=ModelSettings(tool_choice="required"),
     output_type=str,
 )

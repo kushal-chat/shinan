@@ -1,11 +1,13 @@
 from agents import (
     Agent, 
+    function_tool,
+    RunContextWrapper,
     ModelSettings,
 )
 from .guardrail_agent import sensitive_guardrail
 from pydantic import BaseModel
 from typing import Sequence
-from context import ShinanContext, context_tool
+from context import ShinanContext
 from ..prompts import Prompt
 
 class MaterialSearchIdea(BaseModel):
@@ -45,14 +47,12 @@ class Analysis(BaseModel):
     ideas: MaterialSearchIdeas
     insights: MaterialInsights
 
-SEARCH_PROMPT = Prompt().get_material_prompt()
+prompt = Prompt().get_material_prompt()
 
 material_agent = Agent[ShinanContext](
     name="MaterialAgent",
-    instructions=SEARCH_PROMPT,
-    model="o4-mini", # For initial visual analysis, a strong model is necessary.
+    instructions=prompt,
+    model="o4-mini", # Note that o3-mini does not accept images.
     output_type=Analysis,
-    tools=[context_tool],
-    model_settings=ModelSettings(tool_choice="required"),
     input_guardrails=[sensitive_guardrail],
 )
