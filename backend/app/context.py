@@ -9,7 +9,7 @@ class ShinanContext(BaseModel):
     interests: List[str] = Field(..., description="List of user interests")
 
 @function_tool
-def context_tool(ctx: RunContextWrapper[ShinanContext]) -> str:
+def context_tool(ctx: RunContextWrapper[ShinanContext]) -> tuple[str, str, list[str]]:
     """
     Test to retrieve the current agent context to enable informed decision-making and maintain operational awareness. 
     Returns: context.

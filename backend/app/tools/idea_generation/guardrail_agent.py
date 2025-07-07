@@ -16,7 +16,7 @@ guardrail_agent = Agent(
 )
 
 @input_guardrail
-async def sensitive_guardrail(ctx: RunContextWrapper, agent: Agent, input: str) -> GuardrailFunctionOutput:
+async def sensitive_guardrail(ctx: RunContextWrapper, agent: Agent, input: str | list) -> GuardrailFunctionOutput:
     """Guardrail for the idea agent."""
     result = await Runner.run(guardrail_agent, input, context=ctx.context)
 

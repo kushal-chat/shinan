@@ -25,17 +25,14 @@ const ContextPrompt: React.FC<ContextPromptProps> = ({ onSubmit }) => {
     }
     setError("");
     toast(
-      `Got it: received that your role is ${role.trim()} in ${company.trim()}, and you're interested in ${interests}. I'll tailor my responses to you!`,
+      `Thanks for your context!`,
       { duration: 1300 }
     );
     setTimeout(() => {
       onSubmit({
-        // user_id: user_id.trim(),
-        // context: {
         company: company.trim(),
         role: role.trim(),
         interests: interests.split(",").map(i => i.trim()).filter(Boolean),
-        // }
       });
     }, 1500)
   };

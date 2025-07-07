@@ -40,3 +40,7 @@ body {
   flex-direction: column;
   transition: width 0.55s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
+
+.markdown > * {
+  all: revert;
+}

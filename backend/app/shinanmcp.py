@@ -31,26 +31,24 @@ def create_server():
     # Initialize the FastMCP server
     mcp = FastMCP(name="Sample Deep Research MCP Server",
                   instructions="""
-        This MCP server provides search and document retrieval capabilities for deep research.
-        Use the search tool to find relevant documents based on keywords, then use the fetch 
+        This MCP server provides search and document retrieval capabilities for Softbank strategy and financial documents.
+        Use the MCP server file search to find relevant Softbank documents based on keywords, then use the fetch 
         tool to retrieve complete document content with citations.
         """)
 
     @mcp.tool()
-    async def search(query: str) -> Dict[str, List[Dict[str, Any]]]:
+    async def file_search(query: str) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Search for documents using OpenAI Vector Store search.
+        Retrieve Softbank strategy information by ID for detailed analysis and citation.
         
-        This tool searches through the vector store to find semantically relevant matches.
-        Returns a list of search results with basic information. Use the fetch tool to get 
-        complete document content.
+        Use this after finding relevant documents with the search tool to get complete 
+        information for Softbank analysis.
         
         Args:
-            query: Search query string. Natural language queries work best for semantic search.
-        
+            id: File ID from vector store (file-xxx) or local document ID
+            
         Returns:
-            Dictionary with 'results' key containing list of matching documents.
-            Each result includes id, title, text snippet, and optional URL.
+            Complete document with id, title, full text content, optional URL, and metadata
         """
         if not query or not query.strip():
             return {"results": []}
@@ -107,13 +105,12 @@ def create_server():
         return {"results": results}
 
     @mcp.tool()
-    async def fetch(id: str) -> Dict[str, Any]:
+    async def file_fetch(id: str) -> Dict[str, Any]:
         """
-        Retrieve complete document content by ID for detailed analysis and citation.
+        Retrieve Softbank strategy information by ID for detailed analysis and citation.
         
-        This tool fetches the full document content from OpenAI Vector Store or local storage.
         Use this after finding relevant documents with the search tool to get complete 
-        information for analysis and proper citation.
+        information for Softbank analysis.
         
         Args:
             id: File ID from vector store (file-xxx) or local document ID
@@ -121,8 +118,6 @@ def create_server():
         Returns:
             Complete document with id, title, full text content, optional URL, and metadata
             
-        Raises:
-            ValueError: If the specified ID is not found
         """
         if not id:
             raise ValueError("Document ID is required")
@@ -189,13 +184,13 @@ def main():
     server = create_server()
 
     # Configure and start the server
-    logger.info("Starting MCP server on 0.0.0.0:8000")
+    logger.info("Starting MCP server on localhost:8080")
     logger.info("Server will be accessible via SSE transport")
     logger.info("Connect this server to ChatGPT Deep Research for testing")
 
     try:
         # Use FastMCP's built-in run method with SSE transport
-        server.run(transport="sse", host="0.0.0.0", port=8000)
+        server.run(transport="sse", host="localhost", port=8080)
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:

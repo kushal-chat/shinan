@@ -74,7 +74,7 @@ function SettingsModal({
               onChange={() => setChatMode("old")}
               style={{ marginRight: 4 }}
             />
-            Old Version (Query)
+            Deterministic
           </label>
           <label>
             <input
@@ -83,7 +83,7 @@ function SettingsModal({
               onChange={() => setChatMode("new")}
               style={{ marginRight: 4 }}
             />
-            New Version (Deep Research)
+            Handoffs
           </label>
         </div>
         <form
@@ -157,7 +157,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"chat" | "upload">("chat");
   const chatRef = useRef<HTMLDivElement>(null);
   const [agentStep, setAgentStep] = useState<string | null>(null);
-  const [chatMode, setChatMode] = useState<"old" | "new">("new");
+  const [chatMode, setChatMode] = useState<"old" | "new">("old");
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {

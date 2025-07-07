@@ -1,11 +1,18 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { motion, AnimatePresence, m } from "framer-motion";
 import { Toaster, toast } from 'sonner'
 import FileUpload from "./FileUpload";
 
 interface Message {
-  role: "user" | "bot";
+  role: "user" | "bot" | "update";
+  text: string;
+}
+
+interface Query {
+  type: "bubble" | "streamingBubble" | "updates";
   text: string;
 }
 
@@ -16,6 +23,7 @@ interface ChatProps {
     interests: string[];
   } | null;
   mode?: "old" | "new";
+  // potentially add more modes.
 }
 
 const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
@@ -24,6 +32,7 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [agentStep, setAgentStep] = useState<string | null>(null);
+  const [agentUpdate, setAgentUpdate] = useState<string | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +43,13 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
 
   const sendMessage = async () => {
     if (!input.trim() || !shinanContext) return;
+
+    // Using Toast, may delete.
+    if (!messages) {
+      setTimeout(() => {
+        toast("Thank you for using me!");
+      }, 100);
+    }
   
     // Add user's message
     setMessages((msgs) => [...msgs, { role: "user", text: input }]);
@@ -43,16 +59,12 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
     const userInput = input;
     setInput("");
   
-    // Toast feedback
-    setTimeout(() => {
-      toast("Thank you for using me!");
-    }, 100);
-  
     try {
       const endpoint =
         mode === "old"
           ? "http://localhost:8000/client/query"
           : "http://localhost:8000/client/deep_research";
+
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -61,17 +73,48 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
   
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       if (!res.body) throw new Error("No response body");
-  
+      
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
-      let fullText = "";
-  
+      let streaming = false;
+      let streamingMsgIndex: number;
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
   
         const chunk = decoder.decode(value, { stream: true });
-        setMessages((msgs) => [...msgs, { role: "bot", text: chunk }]);
+
+        if (chunk.startsWith("UPDATE " )) {
+          streaming = false;
+          const update_message = chunk.slice(7);
+          setMessages((msgs) => [...msgs, { role: "update", text: update_message}]);
+        } 
+
+        else if (chunk.startsWith("STREAMING ")) {
+          const stream_initial = chunk.slice(10);
+          streaming = true;
+      
+          setMessages((msgs) => [...msgs, { role: "bot", text: ""}]);
+        }
+
+        else if (streaming) {
+          setMessages((msgs) => {
+            const updated = [...msgs]; 
+            const lastIndex = updated.length - 1;
+          
+            updated[lastIndex] = {
+              ...updated[lastIndex],
+              text: updated[lastIndex].text + chunk,
+            };
+            return updated;
+          });
+        }
+
+        else {
+          streaming = false;
+          setMessages((msgs) => [...msgs, { role: "bot", text: chunk }]);
+        }
       }
     } catch (err: any) {
       setMessages((msgs) => [...msgs, { role: "bot", text: "Error: Could not get response." }]);
@@ -108,64 +151,88 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
       >
         {/* Messages */}
         <AnimatePresence>
-          {messages.map((msg, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-                maxWidth: "80%",
-                background: msg.role === "user" ? "#757575" : "#f5f5f7",
-                color: msg.role === "user" ? "#fff" : "#232323",
-                borderRadius: 14,
-                padding: "14px 20px",
-                fontSize: 17,
-                boxShadow: msg.role === "user" ? "0 2px 8px rgba(59,178,115,0.08)" : "none",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {msg.text}
-            </motion.div>
-          ))}
-          {agentStep && (
-            <motion.div
-              key="agent-step"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                alignSelf: "flex-start",
-                maxWidth: "80%",
-                background: "#bdbdbd",
-                color: "#232323",
-                borderRadius: 14,
-                padding: "14px 20px",
-                fontSize: 17,
-                fontStyle: "italic",
-                marginTop: 4,
-                marginBottom: 4,
-                boxShadow: "0 2px 8px rgba(59,178,115,0.08)",
-              }}
-            >
-              {agentStep}
-            </motion.div>
-          )}
-          {loading && !agentStep && (
-            <motion.div
-              key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              style={{ alignSelf: "flex-start", color: "#757575", fontStyle: "italic" }}
-            >
-              Bot is typing...
-            </motion.div>
-          )}
+          {messages.map((msg, i) => {      
+
+            // Message if user.
+            if (msg.role === "user") {
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.2 }}
+                  style={{              
+                    maxWidth: "80%",
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    fontSize: 16,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    alignSelf: "flex-end",
+                    background: "#757575",
+                    color: "#fff",
+                    boxShadow: "0 2px 8px rgba(59,178,115,0.08)",
+                  }}
+                >
+                  {msg.text.startsWith("data:image/") ? (
+                    <img
+                      src={msg.text}
+                      alt="uploaded"
+                      style={{ maxWidth: "100%", borderRadius: 8 }}
+                    />
+                  ) : (
+                    msg.text
+                  )}
+                </motion.div>
+              );
+            }
+
+            // Message if bot.
+            if (msg.role === "bot") {
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.2 }}
+                  style={{              
+                    maxWidth: "80%",
+                    borderRadius: 10,
+                    padding: "8px 10px",
+                    fontSize: 16,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    alignSelf: "flex-start",
+                    background: "#f5f5f7",
+                    color: "#232323",
+                  }}
+                  dangerouslySetInnerHTML={{ __html: msg.text }}
+                />
+              );
+            }
+
+            // Update if update.
+            if (msg.role === "update") {
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{              
+                    alignSelf: "flex-start", 
+                    color: "#757575", 
+                    fontStyle: "italic"
+                  }}
+                >
+                  {msg.text}
+                </motion.div>
+              );
+            }
+          })}
         </AnimatePresence>
       </div>
 
@@ -215,7 +282,25 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
           autoFocus
         />
 
-        <FileUpload />
+        <FileUpload onResult={(result: string) => {
+          let parsed: any;
+          try { parsed = JSON.parse(result); } catch { parsed = null; }
+          if (parsed && Array.isArray(parsed)) {
+            parsed.forEach((msg: any) => {
+              if (msg.content) {
+                msg.content.forEach((item: any) => {
+                  if (item.type === 'input_text') {
+                    setMessages((msgs) => [...msgs, { role: 'bot', text: item.text }]);
+                  } else if (item.type === 'input_image' && item.image_url) {
+                    setMessages((msgs) => [...msgs, { role: 'bot', text: item.image_url }]);
+                  }
+                });
+              }
+            });
+          } else {
+            setMessages((msgs) => [...msgs, { role: 'bot', text: result }]);
+          }
+        }} />
 
         {/* Send button */}
         <motion.button
@@ -301,13 +386,9 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
             "Send"
           )}
         </motion.button>
-        {/* </div> */}
       </form>
-
-      {/* Error */}
       {error && <div style={{ color: "#e74c3c", margin: 8, textAlign: "center" }}>{error}</div>}
     </motion.div>
-    
   );
 };
 

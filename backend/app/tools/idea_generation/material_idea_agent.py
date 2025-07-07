@@ -1,7 +1,5 @@
 from agents import (
     Agent, 
-    function_tool,
-    RunContextWrapper,
     ModelSettings,
 )
 from .guardrail_agent import sensitive_guardrail
@@ -10,7 +8,7 @@ from typing import Sequence
 from context import ShinanContext, context_tool
 from ..prompts import Prompt
 
-class SearchIdea(BaseModel):
+class MaterialSearchIdea(BaseModel):
     """
     A search idea. 
     Defines:
@@ -20,9 +18,9 @@ class SearchIdea(BaseModel):
     query: str
     reasoning: str
 
-class SearchIdeas(BaseModel):
+class MaterialSearchIdeas(BaseModel):
     """A list of search ideas."""
-    ideas: Sequence[SearchIdea]
+    ideas: Sequence[MaterialSearchIdea]
 
 class MaterialInsightPoint(BaseModel):
     """
@@ -44,7 +42,7 @@ class MaterialInsights(BaseModel):
 
 class Analysis(BaseModel):
     """A list of search ideas and material analysis points."""
-    ideas: SearchIdeas
+    ideas: MaterialSearchIdeas
     insights: MaterialInsights
 
 SEARCH_PROMPT = Prompt().get_material_prompt()
@@ -52,7 +50,7 @@ SEARCH_PROMPT = Prompt().get_material_prompt()
 material_agent = Agent[ShinanContext](
     name="MaterialAgent",
     instructions=SEARCH_PROMPT,
-    model="o4-mini", # Note that o3-mini does not accept images.
+    model="o4-mini", # For initial visual analysis, a strong model is necessary.
     output_type=Analysis,
     tools=[context_tool],
     model_settings=ModelSettings(tool_choice="required"),

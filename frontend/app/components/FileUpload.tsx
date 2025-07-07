@@ -93,8 +93,7 @@ const buttonTextMap: Record<ButtonState, React.ReactNode> = {
   error: "Upload Failed - Retry",
 };
 
-const FileUpload: React.FC = () => {
-  const [result, setResult] = useState<string | null>(null);
+const FileUpload: React.FC<{ onResult: (result: string) => void }> = ({ onResult }) => {
   const [loading, setLoading] = useState(false);
   const [buttonState, setButtonState] = useState<ButtonState>("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,39 +110,37 @@ const FileUpload: React.FC = () => {
   }, [buttonState]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
 
-  setLoading(true);
-  setButtonState("loading");
-  setResult(null);
+    setLoading(true);
+    setButtonState("loading");
 
-  const formData = new FormData();
-  formData.append("file", file);
-  if (note.trim()) formData.append("note", note);
+    const formData = new FormData();
+    formData.append("file", file);
+    if (note.trim()) formData.append("note", note);
 
-  setTimeout(() => {
-    toast("Thank you for using me, hang on a bit! ご利用、ありがとうございます！少々お待ちください。");
-  }, 1000);
+    setTimeout(() => {
+      toast("Thank you for using me, hang on a bit! ご利用、ありがとうございます！少々お待ちください。");
+    }, 1000);
 
-  try {
-    const res = await fetch("http://localhost:8000/client/upload", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await res.json();
-    setResult(typeof data === "string" ? data : data.result || JSON.stringify(data));
-    setButtonState("success");
-  } catch (error: any) {
-    setResult(error.message);
-    setButtonState("error");
-  } finally {
-    setLoading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setNote("");
-  }
-};
+    try {
+      const res = await fetch("http://localhost:8000/client/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      onResult(typeof data === "string" ? data : data.result || JSON.stringify(data));
+      setButtonState("success");
+    } catch (error: any) {
+      onResult(error.message);
+      setButtonState("error");
+    } finally {
+      setLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setNote("");
+    }
+  };
 
   return (
     <div style={{ display: "flex", alignItems: "center" }}>
@@ -173,30 +170,6 @@ const FileUpload: React.FC = () => {
         style={{ display: "none" }}
         onChange={handleFileChange}
       />
-      <AnimatePresence>
-        {result && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            style={{
-              alignSelf: "flex-start",
-              maxWidth: "100%",
-              background: "#f5f5f7",
-              color: "#232323",
-              borderRadius: 24,
-              padding: "14px 20px",
-              fontSize: 17,
-              boxShadow: "0 2px 8px rgba(59,178,115,0.08)",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              marginTop: 24,
-            }}
-          >
-            {result}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

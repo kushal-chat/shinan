@@ -12,11 +12,8 @@ where each agent is responsible for a distinct phase:
 Agents are connected via explicit handoffs to ensure a structured and modular research process.
 """
 
-from faulthandler import is_enabled
-from agents import Agent, HostedMCPTool, input_guardrail, Runner, GuardrailFunctionOutput, WebSearchTool, FileSearchTool, handoff, ModelSettings
-from pydantic_core.core_schema import model_ser_schema
+from agents import Agent, HostedMCPTool, WebSearchTool, FileSearchTool, ModelSettings, RunResult
 from .guardrail_agent import sensitive_guardrail
-from agents.run_context import RunContextWrapper
 from pydantic import BaseModel
 from ..prompts import Prompt
 from context import ShinanContext, context_tool
@@ -26,8 +23,11 @@ class Clarifications(BaseModel):
     questions: List[str]
 
 prompts = Prompt()
-INSTRUCTION_AGENT_PROMPT = prompts.get_deep_research_instruction_prompt()
-CLARIFICATION_PROMPT = prompts.get_clarification_prompt()
+INSTRUCTION_AGENT_PROMPT = prompts.instruction_prompt
+CLARIFICATION_PROMPT = prompts.clarification_prompt
+TRIAGE_PROMPT = prompts.triage_prompt
+VERIFIER_PROMPT = prompts.verifier_prompt
+
 intro_phrases = [
     "I have a few questions to clarify",
     "I wanted to make sure we're on the same page",
@@ -39,52 +39,66 @@ intro_phrases = [
     "A few quick questions to point me in the right direction"
 ]
 
-# FileSearchTool(vector_store_ids=["vs_68642a4dab488191b7c7b089cf1abe3e"])
+class Verifier(BaseModel):
+    """A verifier agent on whether things are relevant to the context."""
+    is_relevant: bool
+    improvement_suggestions: str
 
-assistant_agent = Agent[ShinanContext](
-    name="Assistant Agent",
-    model="gpt-4o-mini",
-    instructions=(
-        "You answer short, followup questions relating to the previous discussion and report.\n"
-        "Use MCP resources and others to respond to questions. Keep the discussion close to the context.\n"""
-        "Decide whether a new full-length research task has been given explicitly.\n"
-        "• If yes → call transfer_to_triage_agent.\n"
-    ),
-    handoff_description=("A helpful assistant that answers short, followup questions relating to the previous discussion and report."),
-    tools=[
-        WebSearchTool(),
-        FileSearchTool(vector_store_ids=["vs_68642a4dab488191b7c7b089cf1abe3e"])
-
-        # TODO: Implement MCP as a tool
-        # NOTE: May not work with Cursor application
-        # HostedMCPTool(
-        #         tool_config={
-        #             "type": "mcp",
-        #             "server_label": "file_search",
-        #             "server_url": "http://0.0.0.0:8000/sse",
-        #             "require_approval": "never",}
-    ],
+verifier_agent = Agent[ShinanContext](
+    name="VerifierAgent",
+    instructions=VERIFIER_PROMPT,
+    model="o3-mini",
+    output_type=Verifier,
 )
 
+async def _deep_research_context_relevance(run_result: RunResult) -> str:
+    if not run_result.final_output.is_relevant:
+        return (f"The message is not relevant to the context. Please include context in the message using the following suggestions: {run_result.final_output.improvement_suggestions}")
+    else:
+        return "The message is relevant to the context, return this."
+
+verifier_tool = verifier_agent.as_tool(
+    tool_name="verifier",
+    tool_description="Use to verify the report is relevant to the context.",
+    custom_output_extractor=_deep_research_context_relevance,
+)
+
+async def _context_relevance(run_result: RunResult) -> str:
+    if not run_result.final_output.is_relevant:
+        return (f"Not relevant to the context. Please improve the info using the following suggestions: {run_result.final_output.improvement_suggestions}")
+    else:
+        return "Is relevant to the context, return this."
+
+research_tools = [
+    WebSearchTool(),
+    FileSearchTool(
+        vector_store_ids=["vs_68642a4dab488191b7c7b089cf1abe3e"]
+    ),
+    verifier_agent.as_tool(
+        tool_name="verifier",
+        tool_description="Use to verify the report is relevant to the context.",
+        custom_output_extractor=_context_relevance,
+    )
+]
+
 research_agent = Agent[ShinanContext](
-    name="Research Agent",
-    model="gpt-4o-mini", 
-    # TODO: Replace with web_search_preview so as to allow Deep Research to run
+    name="Researcher",
+    model="gpt-4o-mini",
     instructions="Perform deep empirical research based on the user's instructions.",
-    tools=[WebSearchTool(), FileSearchTool(vector_store_ids=["vs_68642a4dab488191b7c7b089cf1abe3e"])],
+    tools=research_tools,
     model_settings=ModelSettings(tool_choice="required"),
-    handoffs=[assistant_agent]
 )
 
 instruction_agent = Agent[ShinanContext](
-    name="Research Instruction Agent",
+    name="Instructor",
     model="gpt-4o-mini",
     instructions=INSTRUCTION_AGENT_PROMPT,
+    handoff_description="After receiving a clarified input, begins creation of prompt to instruct research agent.",
     handoffs=[research_agent],
 )
 
 clarifying_agent = Agent[ShinanContext](
-    name="Clarifying Questions Agent",
+    name="Clarifier",
     model="gpt-4o-mini",
     instructions=CLARIFICATION_PROMPT,
     output_type=Clarifications,
@@ -94,13 +108,8 @@ clarifying_agent = Agent[ShinanContext](
 )
 
 triage_agent = Agent[ShinanContext](
-    name="Triage Agent",
-    instructions=(
-        "Almost always ask clarifying questions to provide the best possible help.\n"
-        "• Unless the request is 100% clear and specific → call transfer_to_clarifying_questions_agent\n"
-        "• Only if absolutely no clarification could improve the response → call transfer_to_research_instruction_agent\n"
-        "Return exactly ONE function-call."
-    ),
-    handoffs=[handoff(clarifying_agent), instruction_agent], 
+    name="Triage",
+    instructions=TRIAGE_PROMPT,
+    handoffs=[clarifying_agent, instruction_agent],
     input_guardrails=[sensitive_guardrail],
 )
