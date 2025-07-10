@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import random
+from re import search
 from token import OP
 import uuid
 from typing import Any, AsyncIterator, Dict, List, Sequence, cast
@@ -99,11 +100,8 @@ class ShinanQuery(BaseModel):
 # Creating the Shinan Session Manager for data handling.
 class ShinanSessionManager:
     def __init__(self) -> None:
-        # Session state initialization
         self.context : ShinanContext = ShinanContext(company="SoftBank", role="Intern", interests=["AI", "Strategy"])
         self.input_items : List[TResponseInputItem] = []
-        self.agents : List[Agent[ShinanContext]] = []
-        self.group_id = uuid.uuid4().hex[:16]
 
         self.text_ideas: TextSearchIdeas = TextSearchIdeas(ideas=[])
         self.analysis: Analysis = Analysis(
@@ -111,7 +109,6 @@ class ShinanSessionManager:
             insights=MaterialInsights(insights=[]) 
         )
 
-        self.searches: List[str] = []
         self.report: Report = Report(report="")
 
     # --- Context management ---
@@ -136,15 +133,6 @@ class ShinanSessionManager:
         """Add a single input item to the session."""
         self.input_items.append(input_item)
 
-    # --- Agent management ---
-    def get_agent(self, index : int = -1) -> Agent[ShinanContext]:
-        """Get an agent from the session by index (default: last)."""
-        return self.agents[index]
-
-    def add_agent(self, current_agent : Agent[ShinanContext]):
-        """Add an agent to the session."""
-        self.agents.append(current_agent)
-
     # --- Search ideas and analysis management ---
     def set_text_ideas(self, text_ideas : TextSearchIdeas) -> None:
         """Set the text search ideas for the session."""
@@ -153,15 +141,6 @@ class ShinanSessionManager:
     def set_analysis(self, analysis : Analysis) -> None:
         """Set the material analysis for the session."""
         self.analysis = analysis
-
-    # --- Search results management ---
-    def get_searches(self) -> List[str]:
-        """Get an agent from the session by index (default: last)."""
-        return self.searches
-
-    def add_search(self, search : str) -> None:
-        """Add a search result to the session."""
-        self.searches.append(search)
     
     # --- Report management ---
     def set_report(self, report: Report) -> None:
@@ -240,7 +219,6 @@ class ShinanTextIntelligence:
 
     async def run_query(self, request: ShinanQuery) -> AsyncIterator[str]:
 
-        self.session.set_input_items([{"content": request.query, "role": "user"}])
         trace_id = gen_trace_id()
         with trace("Shinan Intelligence Text Workflow", trace_id=trace_id, group_id=self.session.group_id):
             
@@ -256,8 +234,11 @@ class ShinanTextIntelligence:
                 yield ev
             searches = self.session.get_searches()
             
+            # Adding original query of user, given above research.
+            self.session.add_input_items([{"content": request.query, "role": "user"}])
+
             # Generating report
-            report_generator = self._generate_report(query=request.query, search_results=searches)
+            report_generator = self._generate_report(query=request.query)
             async for ev in report_generator:
                 yield ev
 
@@ -292,7 +273,6 @@ class ShinanTextIntelligence:
                 continue
 
             elif ev.type == "run_item_stream_event":
-                
                 if ev.item.type == "tool_call_item":
                     yield f"UPDATE 背景を確認させていただきます。"
                     asyncio.sleep(1.0)
@@ -316,7 +296,6 @@ class ShinanTextIntelligence:
                         f"UPDATE {company}で{role}としてお勤めで、{interests_formatted}にご興味があるのですね。承知しました!"
                     )
                     yield f"{context_message}"
-
                     ideas_generation_logger.info(context_message)
 
         await asyncio.sleep(1.0)
@@ -375,9 +354,17 @@ class ShinanTextIntelligence:
                                 await asyncio.sleep(1.0)
 
                         elif getattr(ev.item.raw_item, "type", None) == "function_call":
-
-                            search_logger.info("UPDATE MCPを介してソフトバンクが公開した資料をお調べします...")
-                            yield f"UPDATE MCPを介してソフトバンク公開資料をお調べします..."
+                            update_messages = [
+                                "UPDATE MCPを介してソフトバンクに関連する公開資料を検索します...",
+                                "UPDATE ソフトバンクの公開資料をMCP経由で調査中です...",
+                                "UPDATE MCPを使って関連するレポートを検索しています...",
+                                "UPDATE MCP経由で最新のソフトバンク資料を取得中です..."
+                            ]
+                            if not hasattr(self, '_mcp_update_idx'):
+                                self._mcp_update_idx = 0
+                            msg = update_messages[self._mcp_update_idx % len(update_messages)]
+                            self._mcp_update_idx += 1
+                            yield msg
                             await asyncio.sleep(1.0)
 
                     elif ev.item.type == "message_output_item":
@@ -385,6 +372,9 @@ class ShinanTextIntelligence:
 
             search_result = result.final_output_as(str)
             self.session.add_search(search_result)
+
+            # Add to input items.
+            self.session.add_input_items(ItemHelpers.input_to_new_input_list(result)[0])
 
         except Exception as e:
             search_logger.error(f"Search failed for '{idea.query}': {e}.", exc_info=True)
@@ -405,6 +395,10 @@ class ShinanTextIntelligence:
             queue: asyncio.Queue[str | None] = asyncio.Queue()
             
             async def consume_generator(gen, gen_id: int):
+                """
+                Running search generators asynchronously in following tasks list.
+                Puts in asyncio Queue.
+                """
                 search_logger.debug(f"Starting generator {gen_id}")
                 try:
                     async for item in gen:
@@ -446,7 +440,7 @@ class ShinanTextIntelligence:
 
         yield "検索を完了しました！今からリポートを作成いたします。"
 
-    async def _generate_report(self, query: str, search_results: List[str], is_deep_research: bool = False) -> AsyncIterator[str]:
+    async def _generate_report(self) -> AsyncIterator[str]:
         """Generate a report from a query and search results."""
 
         report_logger = logger.getChild("report")
@@ -473,14 +467,24 @@ class ShinanTextIntelligence:
 
                         elif ev.item.raw_item.type == "function_call":
                             report_logger.info("MCP to access a vector store of SoftBank reports")
-                            report_logger.info(ev.item.raw_item)
-                            yield f"UPDATE MCPを介してソフトバンクに関連する公開資料を検索します..."
+                            update_messages = [
+                                "UPDATE MCPを介してソフトバンクに関連する公開資料を検索します...",
+                                "UPDATE ソフトバンクの公開資料をMCP経由で調査中です...",
+                                "UPDATE MCPを使って関連するレポートを検索しています...",
+                                "UPDATE MCP経由で最新のソフトバンク資料を取得中です..."
+                            ]
+                            if not hasattr(self, '_mcp_update_idx'):
+                                self._mcp_update_idx = 0
+                                
+                            msg = update_messages[self._mcp_update_idx % len(update_messages)]
+                            self._mcp_update_idx += 1
+                            yield msg
+
                             await asyncio.sleep(1.0)
 
                     elif ev.item.type == "message_output_item":
                         yield ("UPDATE リポートを完成しました！")
                         await asyncio.sleep(1.0)
-
                         yield str(ItemHelpers.text_message_output(ev.item))
 
 class ShinanMaterialIntelligence:
@@ -498,8 +502,6 @@ class ShinanMaterialIntelligence:
         with trace("Shinan Intelligence Material Workflow", trace_id=trace_id, group_id=self.session.group_id):
             # Generate search ideas and material analysis
             analysis: Analysis = await self._generate_search_ideas_material(material, material_agent)
-            ideas : MaterialSearchIdeas = analysis.ideas
-            insights : MaterialInsights = analysis.insights
 
             # Research web for search ideas
             articles: List[str] = await self._research_web(ideas)
@@ -512,6 +514,11 @@ class ShinanMaterialIntelligence:
     async def _generate_search_ideas_material(self, material: list[TResponseInputItem], idea_agent: Agent) -> Analysis:
         try:
             result = await Runner.run(idea_agent, material, context=self.context)
+            analysis = result.final_output_as(Analysis)
+
+            self.session.set_analysis(analysis)
+            self.session.set_input_items(result.to_input_list())
+
             return result.final_output_as(Analysis)
 
         except InputGuardrailTripwireTriggered as e:
@@ -528,7 +535,9 @@ class ShinanMaterialIntelligence:
         input_data = f"Search term: {idea.query}\nReason: {idea.reasoning}"
         try:
             result = await Runner.run(search_agent, input_data, context=self.context)
-            return str(result.final_output)
+            search_result = str(result.final_output)
+            self.session.add_input_items(result.to_input_list())
+            return search_result
         except Exception as e:
             print(f"Search failed for {idea.query}: {e}")
             return None
@@ -556,7 +565,7 @@ class ShinanMaterialIntelligence:
             custom_output_extractor=_context_relevance,
         )
         writer_agent_with_verifier = writer_agent.clone(tools=[verifier_tool])
-        result = await Runner.run(writer_agent_with_verifier, f"Material analysis: {material_analysis}\nSearch results: {search_results}", context=self.context)
+        result = await Runner.run(writer_agent_with_verifier, input=self.session.get_input_items(), context=self.context, max_turns=4)
         return result.final_output()
 
 session = ShinanSessionManager()
