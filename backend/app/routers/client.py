@@ -211,7 +211,7 @@ class ShinanTextIntelligence:
         self.session.add_input_items({"content": request.query, "role": "user"})
         trace_id = gen_trace_id()
 
-        with trace("Shinan Intelligence Messaging", trace_id=trace_id, group_id=self.session.group_id):
+        with trace("Shinan Intelligence Messaging", trace_id=trace_id):
             result = await Runner.run(messages_agent, input=self.session.get_input_items(), context=self.session.get_context())
         
         self.session.add_input_items({"content": result.final_output, "role": "bot"}) # type: ignore
@@ -220,7 +220,7 @@ class ShinanTextIntelligence:
     async def run_query(self, request: ShinanQuery) -> AsyncIterator[str]:
 
         trace_id = gen_trace_id()
-        with trace("Shinan Intelligence Text Workflow", trace_id=trace_id, group_id=self.session.group_id):
+        with trace("Shinan Intelligence Text Workflow", trace_id=trace_id):
             
             # Generating search ideas 
             ideas_generator = self._generate_search_ideas(request.query, text_agent)
@@ -232,13 +232,14 @@ class ShinanTextIntelligence:
             research_generator = self._overall_search(ideas)
             async for ev in research_generator:
                 yield ev
-            searches = self.session.get_searches()
             
             # Adding original query of user, given above research.
-            self.session.add_input_items([{"content": request.query, "role": "user"}])
+            self.session.add_input_items({"content": request.query, "role": "user"})
+
+            print(self.session.get_input_items())
 
             # Generating report
-            report_generator = self._generate_report(query=request.query)
+            report_generator = self._generate_report()
             async for ev in report_generator:
                 yield ev
 
@@ -277,7 +278,7 @@ class ShinanTextIntelligence:
                     yield f"UPDATE 背景を確認させていただきます。"
                     asyncio.sleep(1.0)
 
-                if ev.item.type == "tool_call_output_item":
+                elif ev.item.type == "tool_call_output_item":
                     """ 
                     Checking user context and company information for personalized response 
 
@@ -350,7 +351,7 @@ class ShinanTextIntelligence:
                             action = getattr(ev.item.raw_item, "action", None)
                             if action and getattr(action, "type", None) == "search":
                                 search_logger.info(f"Searching the web for: {getattr(action, 'query', '')}")
-                                yield f"UPDATE {idea.query}を検索中..."
+                                yield f"UPDATE {idea.query}をWEBで検索中..."
                                 await asyncio.sleep(1.0)
 
                         elif getattr(ev.item.raw_item, "type", None) == "function_call":
@@ -371,10 +372,10 @@ class ShinanTextIntelligence:
                         search_logger.info(f"Found {ev.item.raw_item}")
 
             search_result = result.final_output_as(str)
-            self.session.add_search(search_result)
 
             # Add to input items.
-            self.session.add_input_items(ItemHelpers.input_to_new_input_list(result)[0])
+            search_logger.info({"content": search_result, "role": "assistant"})
+            self.session.add_input_items({"content": search_result, "role": "assistant"})
 
         except Exception as e:
             search_logger.error(f"Search failed for '{idea.query}': {e}.", exc_info=True)
@@ -448,10 +449,11 @@ class ShinanTextIntelligence:
 
         async with MCPServerSse(name="Shinan MCP Vector Store", params={"url": "http://localhost:8080/sse"}, cache_tools_list=True) as mcp_server:
             writer_mcp_agent = writer_agent.clone(mcp_servers=[mcp_server])
-            result = Runner.run_streamed(writer_mcp_agent, input=self.session.get_input_items(), context=self.context, max_turns=4)
+            result = Runner.run_streamed(writer_mcp_agent, input=self.session.get_input_items(), context=self.context)
         
             async for ev in result.stream_events():
                 if ev.type == "run_item_stream_event":
+                    await asyncio.sleep(1.0)
 
                     if ev.item.type == "tool_call_item":
                         report_logger.info(f"Processing run_item_stream_event: {ev.item.raw_item.type}")
@@ -461,9 +463,7 @@ class ShinanTextIntelligence:
 
                             if ev.item.raw_item.action.type == "search":
                                 report_logger.info(f"Searching the web for: {ev.item.raw_item.action.query}")
-                                # yield f"UPDATE Searching the web for {ev.item.raw_item.action.query}..." 
-                                yield f"UPDATE {ev.item.raw_item.action.query}を検索中..." 
-                                await asyncio.sleep(1.0)
+                                yield f"UPDATE {ev.item.raw_item.action.query}をWEBで検索中..." 
 
                         elif ev.item.raw_item.type == "function_call":
                             report_logger.info("MCP to access a vector store of SoftBank reports")
@@ -475,16 +475,16 @@ class ShinanTextIntelligence:
                             ]
                             if not hasattr(self, '_mcp_update_idx'):
                                 self._mcp_update_idx = 0
-                                
+
                             msg = update_messages[self._mcp_update_idx % len(update_messages)]
                             self._mcp_update_idx += 1
+                            await asyncio.sleep(1.0)
                             yield msg
 
-                            await asyncio.sleep(1.0)
 
                     elif ev.item.type == "message_output_item":
                         yield ("UPDATE リポートを完成しました！")
-                        await asyncio.sleep(1.0)
+                        await asyncio.sleep(2.0)
                         yield str(ItemHelpers.text_message_output(ev.item))
 
 class ShinanMaterialIntelligence:
@@ -499,15 +499,15 @@ class ShinanMaterialIntelligence:
 
     async def run_upload(self, material: list[TResponseInputItem]) -> str:
         trace_id = gen_trace_id()
-        with trace("Shinan Intelligence Material Workflow", trace_id=trace_id, group_id=self.session.group_id):
+        with trace("Shinan Intelligence Material Workflow", trace_id=trace_id):
             # Generate search ideas and material analysis
             analysis: Analysis = await self._generate_search_ideas_material(material, material_agent)
 
             # Research web for search ideas
-            articles: List[str] = await self._research_web(ideas)
+            articles: List[str] = await self._research_web(analysis.ideas)
 
             # Generate report
-            report: str = await self._generate_report(search_results=articles, material_analysis=insights)
+            report: str = await self._generate_report(search_results=articles, material_analysis=analysis.insights)
 
         return report
 
@@ -536,7 +536,7 @@ class ShinanMaterialIntelligence:
         try:
             result = await Runner.run(search_agent, input_data, context=self.context)
             search_result = str(result.final_output)
-            self.session.add_input_items(result.to_input_list())
+            self.session.add_input_items({"content": search_result, "role": "assistant"})
             return search_result
         except Exception as e:
             print(f"Search failed for {idea.query}: {e}")

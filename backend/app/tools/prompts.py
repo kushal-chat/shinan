@@ -234,7 +234,7 @@ class Prompt:
         Get the writer prompt.
         """
         WRITER_PROMPT = ("""
-            You MUST RUN EXACTLY TWO MCP SEARCHES (tool file_search and file_fetch) to search. 
+            You MUST RUN EXACTLY TWO TIMES file_search and file_fetch.
 
             You are a friendly assistant in helping someone learn more about companies, initiatives and their interests.
             Your task is to synthesize recent developments related to SoftBank using the tools provided. 

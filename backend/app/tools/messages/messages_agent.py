@@ -1,13 +1,5 @@
 from agents import Agent, RunContextWrapper
-
 from context import ShinanContext
-
-PROMPT = (
-    "You are a helpful assistant who greets the user and engages them in friendly conversation. "
-    "You understand the user's context, including their role, company, and interests. "
-    "Reference the context often, and things mentioned earlier in the conversation, like searches and websites."
-    "Ask thoughtful questions or make comments related to their interests, role, or company to encourage further conversation."
-)
 
 def context_instructions(
     context: RunContextWrapper[ShinanContext], agent: Agent[ShinanContext]

@@ -61,7 +61,7 @@ function SettingsModal({
         position: "relative"
       }}>
         <button onClick={onClose} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 22, cursor: "pointer" }}>&times;</button>
-        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Settings</div>
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>設定</div>
         <form
           onSubmit={e => {
             e.preventDefault();
@@ -79,22 +79,22 @@ function SettingsModal({
           }}
           style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}
         >
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Current Context</div>
-          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>Company</label>
+          {/* <div style={{ fontWeight: 600, marginBottom: 4 }}>Current Context</div> */}
+          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>企業</label>
           <input
             value={company}
             onChange={e => setCompany(e.target.value)}
             placeholder="Company"
             style={{ width: "100%", borderRadius: 8, border: "1px solid #e5e7eb", padding: 10, fontSize: 15, color: "#232323" }}
           />
-          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>Role</label>
+          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>職業</label>
           <input
             value={role}
             onChange={e => setRole(e.target.value)}
             placeholder="Role"
             style={{ width: "100%", borderRadius: 8, border: "1px solid #e5e7eb", padding: 10, fontSize: 15, color: "#232323" }}
           />
-          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>Interests (comma separated)</label>
+          <label style={{ alignSelf: "flex-start", color: "#232323", fontSize: 15, fontWeight: 500 }}>興味</label>
           <input
             value={interests}
             onChange={e => setInterests(e.target.value)}
