@@ -5,8 +5,8 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="Shinan",
-    description="Shinan is a platform for financial research and analysis",
-    version="1.0.0",
+    description="Shinan is a platform for AI agents to conduct relevant research.",
+    version="2.0.0",
 )
 
 # Add CORS middleware
@@ -19,8 +19,3 @@ app.add_middleware(
 )
 
 app.include_router(root_router)
-
-# Hello, world!
-@app.get("/")
-async def read_root():
-    return {"message": "Hello, World!"}

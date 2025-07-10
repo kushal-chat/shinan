@@ -162,16 +162,27 @@ class Prompt:
 
         Consider the author's perspective and potential biases when formulating search strategies.
 
-            **This will be shown in HTML, so put all citations in <a href> and use <ul> <li> if needed.**
+            **This will be shown in Markdown, so put all citations as necessary.**
 
         """
         )
         return TEXT_PROMPT
     
     def softbank_blogs(self) -> str:
+        """ 
+        Scrape most recently published blogs from Softbank's website. 
+
+        Returns: 
+        repr form of list of blogs on sbnews page.
+        """
+
         search_endpoint = "https://www.softbank.jp/sbnews"
 
-        response = requests.get(search_endpoint)
+        try:
+            response = requests.get(search_endpoint)
+        except requests.exceptions.RequestException as e:
+            raise 
+    
         soup = BeautifulSoup(response.text, 'html.parser')
         items = soup.select('li.urllist-item.recent-entries-item')
         blogs = ""
@@ -180,9 +191,9 @@ class Prompt:
             title_tag = item.select_one('a.urllist-title-link')
             title = title_tag.text.strip() if title_tag else 'No title'
             article_url = title_tag['href'] if title_tag else 'No URL'
-            blogs+=(f"Title: {title}, URL: {article_url}\n")
+            blogs += f"Title: {title}, URL: {article_url}\n"
 
-        return blogs
+        return repr(blogs)
 
     def get_web_search_prompt(self) -> str:
         """
@@ -223,16 +234,16 @@ class Prompt:
         Get the writer prompt.
         """
         WRITER_PROMPT = ("""
+            You MUST RUN EXACTLY TWO MCP SEARCHES (tool file_search and file_fetch) to search. 
+
             You are a friendly assistant in helping someone learn more about companies, initiatives and their interests.
             Your task is to synthesize recent developments related to SoftBank using the tools provided. 
             Your report should help the user quickly understand current priorities, strategies, and developments relevant to the company.
             Your report should demonstrate conciseness and an understanding of releases that would otherwise be exceedingly difficult to discover.
-            It should be three paragraphs, and be well structured. 
-            This will be shown as an HTML file! Use bolds, italics, and links to citations. Do not use **,  citeturn0search3turn0news12, etc.
-
-            You have only two turns to search. You MUST NOT go over two turns.
-
-            If your search is internal to Softbank --> use tool file_search and file_fetch.
+            It should be three paragraphs, and be well structured with a bold title.
+            Incorporate web info and mcp info.
+            It should be in the LANGUAGE THAT CONVERSATION IS IN. Japanese or English
+            This will be shown as a Markdown file! Use bolds, italics, and links to citations. Do not use strong,  citeturn0search3turn0news12, etc.
         """
         )
         return WRITER_PROMPT

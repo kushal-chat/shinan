@@ -16,13 +16,14 @@
 }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), 'Source Han Sans', sans-serif;
+  /* font-family: var(--font-sans); */
   background: var(--background);
   color: var(--foreground);
 }
 
 .shinan-kanji {
-  font-family: var(--font-serif), 'Source Han Serif', serif;
+  font-family: var(--font-serif);
   font-weight: 900;
   letter-spacing: 2px;
   font-size: 2.5rem;

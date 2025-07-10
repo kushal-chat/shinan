@@ -32,6 +32,7 @@ function SettingsModal({
     setInterests(context?.interests?.join(", ") || "");
   }, [context, open]);
 
+  // Shinan Context
   if (!open) return null;
   return (
     <div style={{
@@ -215,7 +216,7 @@ export default function Home() {
             >
               <AnimatePresence mode="wait">
                 {activeTab === "chat" ? (
-                  <Chat shinanContext={shinanContext} mode={"old"} />
+                  <Chat shinanContext={shinanContext}/>
                 ) : (
                   <motion.div
                     key="upload"

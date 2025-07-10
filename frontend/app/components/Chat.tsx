@@ -22,17 +22,17 @@ interface ChatProps {
     role: string;
     interests: string[];
   } | null;
-  mode?: "old" | "new";
-  // potentially add more modes.
+  mode?: "research" | "messages" | "deep";
 }
 
-const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
+const Chat: React.FC<ChatProps> = ({ shinanContext, mode: initialMode = "research" }) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [agentStep, setAgentStep] = useState<string | null>(null);
   const [agentUpdate, setAgentUpdate] = useState<string | null>(null);
+  const [selectedMode, setSelectedMode] = useState<"research" | "messages" | "deep">(initialMode);
   const chatRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,15 +55,16 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
     setMessages((msgs) => [...msgs, { role: "user", text: input }]);
     setLoading(true);
     setError("");
-    setAgentStep(null);
     const userInput = input;
     setInput("");
   
     try {
-      const endpoint =
-        mode === "old"
-          ? "http://localhost:8000/client/query"
-          : "http://localhost:8000/client/deep_research";
+      const endpoints = {
+        research: "http://localhost:8000/client/query",
+        messages: "http://localhost:8000/client/messages",
+        deep: "http://localhost:8000/client/deep_research"
+      };
+      const endpoint = endpoints[selectedMode] || endpoints.research;
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -76,6 +77,7 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
       
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
+      
       let streaming = false;
       let streamingMsgIndex: number;
 
@@ -94,7 +96,6 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
         else if (chunk.startsWith("STREAMING ")) {
           const stream_initial = chunk.slice(10);
           streaming = true;
-      
           setMessages((msgs) => [...msgs, { role: "bot", text: ""}]);
         }
 
@@ -208,8 +209,11 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
                     background: "#f5f5f7",
                     color: "#232323",
                   }}
-                  dangerouslySetInnerHTML={{ __html: msg.text }}
-                />
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.text}
+                  </ReactMarkdown>
+                </motion.div>
               );
             }
 
@@ -253,143 +257,197 @@ const Chat: React.FC<ChatProps> = ({ shinanContext, mode = "new" }) => {
         }}
       >
 
-        {/* <div style={{ width: '100%', marginBottom: 6, zIndex: 2, position: 'relative', color: '#555', fontSize: 14 }}>
-          {shinanContext && (
-            <span>
-              Your context: <b>Company:</b> {shinanContext.company}, <b>Role:</b> {shinanContext.role}, <b>Interests:</b> {shinanContext.interests.join(', ')}
-            </span>
-          )}
-        </div> 
-        <div> */}
+        {/* Container for stacked layout */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          
+          {/* Context section */}
+          <div style={{ width: '100%', zIndex: 2, position: 'relative', color: '#555', fontSize: 14 }}>
+            {shinanContext && (
+              <span>
+                <b>いただいた背景:</b> 企業は {shinanContext.company}, 職業は {shinanContext.role}, 興味は {shinanContext.interests.join(', ')}
+              </span>
+            )}
+          </div>
 
-        {/* Input */}
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Type your research question..."
-          style={{
-            flex: 1,
-            border: "1px solid #bdbdbd",
-            borderRadius: 20,
-            padding: "14px 16px",
-            fontSize: 17,
-            outline: "none",
-            background: "#fff",
-            color: "#232323"
-          }}
-          disabled={loading}
-          autoFocus
-        />
+          {/* Mode selector */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'flex-start',
+            gap: 16, 
+            alignItems: 'center',
+            fontSize: 14,
+            color: '#555'
+          }}>
+            <span style={{ fontWeight: 600 }}>モード:</span>
+            
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="mode"
+                value="research"
+                checked={selectedMode === "research"}
+                onChange={(e) => setSelectedMode(e.target.value as "research")}
+                style={{ margin: 0 }}
+              />
+              <span>Research</span>
+            </label>
 
-        <FileUpload onResult={(result: string) => {
-          let parsed: any;
-          try { parsed = JSON.parse(result); } catch { parsed = null; }
-          if (parsed && Array.isArray(parsed)) {
-            parsed.forEach((msg: any) => {
-              if (msg.content) {
-                msg.content.forEach((item: any) => {
-                  if (item.type === 'input_text') {
-                    setMessages((msgs) => [...msgs, { role: 'bot', text: item.text }]);
-                  } else if (item.type === 'input_image' && item.image_url) {
-                    setMessages((msgs) => [...msgs, { role: 'bot', text: item.image_url }]);
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="mode"
+                value="messages"
+                checked={selectedMode === "messages"}
+                onChange={(e) => setSelectedMode(e.target.value as "messages")}
+                style={{ margin: 0 }}
+              />
+              <span>Messages</span>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="mode"
+                value="deep"
+                checked={selectedMode === "deep"}
+                onChange={(e) => setSelectedMode(e.target.value as "deep")}
+                style={{ margin: 0 }}
+              />
+              <span>Deep Research (beta)</span>
+            </label>
+          </div>
+
+          {/* Input section */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="Type your research question..."
+              style={{
+                flex: 1,
+                border: "1px solid #bdbdbd",
+                borderRadius: 20,
+                padding: "14px 16px",
+                fontSize: 17,
+                outline: "none",
+                background: "#fff",
+                color: "#232323"
+              }}
+              disabled={loading}
+              autoFocus
+            />
+
+            <FileUpload onResult={(result: string) => {
+              let parsed: any;
+              try { parsed = JSON.parse(result); } catch { parsed = null; }
+              if (parsed && Array.isArray(parsed)) {
+                parsed.forEach((msg: any) => {
+                  if (msg.content) {
+                    msg.content.forEach((item: any) => {
+                      if (item.type === 'input_text') {
+                        setMessages((msgs) => [...msgs, { role: 'bot', text: item.text }]);
+                      } else if (item.type === 'input_image' && item.image_url) {
+                        setMessages((msgs) => [...msgs, { role: 'bot', text: item.image_url }]);
+                      }
+                    });
                   }
                 });
+              } else {
+                setMessages((msgs) => [...msgs, { role: 'bot', text: result }]);
               }
-            });
-          } else {
-            setMessages((msgs) => [...msgs, { role: 'bot', text: result }]);
-          }
-        }} />
+            }} />
 
-        {/* Send button */}
-        <motion.button
-          type="submit"
-          disabled={loading || !input.trim()}
-          variants={{
-            idle: {
-              backgroundColor: "#757575",
-              scale: 1,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              transition: { duration: 0.3 },
-            },
-            loading: {
-              backgroundColor: "#bdbdbd",
-              scale: 1.05,
-              boxShadow: "0 4px 12px rgba(189,189,189,0.3)",
-              transition: {
-                repeat: Infinity,
-                repeatType: "mirror" as const,
-                duration: 1.1,
-                backgroundColor: { duration: 0.25 },
-                boxShadow: { duration: 0.25 },
-                scale: { duration: 0.4 },
-              },
-            },
-          }}
-          animate={loading ? "loading" : "idle"}
-          style={{
-            color: "#fff",
-            border: "none",
-            borderRadius: 10,
-            padding: "14px 16px",
-            fontWeight: 700,
-            fontSize: 17,
-            cursor: loading ? "not-allowed" : "pointer",
-            transition: "background 0.2s"
-          }}
-        >
-          {loading ? (
-            <span style={{ display: "inline-flex", alignItems: "center" }}>
-              <span
-                style={{
-                  display: "inline-block",
-                  verticalAlign: "middle",
-                  marginRight: 8,
-                  width: 18,
-                  height: 18,
-                }}
-              >
-                <svg
-                  style={{
-                    animation: "spin 1s linear infinite",
-                    display: "block",
-                  }}
-                  width="18"
-                  height="18"
-                  viewBox="0 0 18 18"
-                >
-                  <circle
-                    cx="9"
-                    cy="9"
-                    r="7"
-                    fill="none"
-                    stroke="#fff"
-                    strokeWidth="2.5"
-                    strokeDasharray="34"
-                    strokeDashoffset="10"
-                    strokeLinecap="round"
-                    opacity="0.7"
-                  />
-                </svg>
-                <style>
-                  {`
-                    @keyframes spin {
-                      100% { transform: rotate(360deg); }
-                    }
-                  `}
-                </style>
-              </span>
-              Sending...
-            </span>
-          ) : (
-            "Send"
-          )}
-        </motion.button>
+            {/* Send button */}
+            <motion.button
+              type="submit"
+              disabled={loading || !input.trim() || selectedMode==="deep"}
+              variants={{
+                idle: {
+                  backgroundColor: "#757575",
+                  scale: 1,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                  transition: { duration: 0.3 },
+                },
+                loading: {
+                  backgroundColor: "#bdbdbd",
+                  scale: 1.05,
+                  boxShadow: "0 4px 12px rgba(189,189,189,0.3)",
+                  transition: {
+                    repeat: Infinity,
+                    repeatType: "mirror" as const,
+                    duration: 1.1,
+                    backgroundColor: { duration: 0.25 },
+                    boxShadow: { duration: 0.25 },
+                    scale: { duration: 0.4 },
+                  },
+                },
+              }}
+              animate={loading ? "loading" : "idle"}
+              style={{
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                padding: "14px 16px",
+                fontWeight: 700,
+                fontSize: 17,
+                cursor: loading || !input.trim() ? "not-allowed" : "pointer",
+                transition: "background 0.2s",
+              }}
+            >
+              {loading ? (
+                <span style={{ display: "inline-flex", alignItems: "center" }}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      verticalAlign: "middle",
+                      marginRight: 8,
+                      width: 18,
+                      height: 18,
+                    }}
+                  >
+                    <svg
+                      style={{
+                        animation: "spin 1s linear infinite",
+                        display: "block",
+                      }}
+                      width="18"
+                      height="18"
+                      viewBox="0 0 18 18"
+                    >
+                      <circle
+                        cx="9"
+                        cy="9"
+                        r="7"
+                        fill="none"
+                        stroke="#fff"
+                        strokeWidth="2.5"
+                        strokeDasharray="34"
+                        strokeDashoffset="10"
+                        strokeLinecap="round"
+                        opacity="0.7"
+                      />
+                    </svg>
+                    <style>
+                      {`
+                        @keyframes spin {
+                          100% { transform: rotate(360deg); }
+                        }
+                      `}
+                    </style>
+                  </span>
+                  Sending...
+                </span>
+              ) : (
+                "Send"
+              )}
+            </motion.button>
+          </div>
+        </div>
       </form>
       {error && <div style={{ color: "#e74c3c", margin: 8, textAlign: "center" }}>{error}</div>}
     </motion.div>
   );
 };
 
-export default Chat; 
+export default Chat;
