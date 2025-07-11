@@ -121,7 +121,7 @@ const FileUpload: React.FC<{ onResult: (result: string) => void }> = ({ onResult
     if (note.trim()) formData.append("note", note);
 
     setTimeout(() => {
-      toast("Thank you for using me, hang on a bit! ご利用、ありがとうございます！少々お待ちください。");
+      toast("ご利用、ありがとうございます！少々お待ちください。");
     }, 1000);
 
     try {

@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-slim
 
 # Set working directory
 WORKDIR /app
@@ -6,7 +6,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Copy the rest of the application
+RUN npm ci
+
 COPY . .
 
 # Expose port

@@ -1,6 +1,12 @@
 # Use official Python image
 FROM python:3.13.5-slim
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install Poetry
 RUN pip install poetry
 
@@ -14,13 +20,17 @@ COPY pyproject.toml poetry.lock* ./
 RUN poetry config virtualenvs.create false
 
 # Install dependencies
-RUN poetry install --no-dev --no-interaction --no-ansi
+RUN poetry install --no-interaction --no-ansi --no-root
 
 # Copy the rest of the application
 COPY . .
 
 # Expose port
 EXPOSE 8000
+EXPOSE 8080
 
-# Start the application
-CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Add supervisord config
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Start both servers using supervisord
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"] 

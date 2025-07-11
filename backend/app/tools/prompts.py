@@ -1,6 +1,34 @@
 import requests
 from bs4 import BeautifulSoup
 
+
+def softbank_blogs() -> str:
+    """ 
+    Scrape five most recently published blogs from Softbank's website. 
+
+    Returns: 
+    repr form of list of blogs on sbnews page.
+    """
+
+    search_endpoint = "https://www.softbank.jp/sbnews"
+
+    try:
+        response = requests.get(search_endpoint)
+    except requests.exceptions.RequestException as e:
+        raise 
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+    items = soup.select('li.urllist-item.recent-entries-item')
+    blogs = ""
+
+    for item in items[:5]:
+        title_tag = item.select_one('a.urllist-title-link')
+        title = title_tag.text.strip() if title_tag else 'No title'
+        article_url = title_tag['href'] if title_tag else 'No URL'
+        blogs += f"Title: {title}, URL: {article_url}\n"
+
+    return repr(blogs)
+
 class Prompt:
     """
     A class that contains all the prompts for the agents.
@@ -126,81 +154,35 @@ class Prompt:
         Get the text analysis prompt.
         """
         TEXT_PROMPT = (
-            """
-        You are an expert research analyst who specializes in extracting actionable insights from textual content and identifying strategic research opportunities.
-
-        Your task is to analyze the provided text content and generate 2-3 strategic search ideas that would provide additional valuable insights or validate key findings.
-
-        ANALYSIS APPROACH:
-        1. **FIRST: Use the context retrieval tool to understand the source, purpose, and background of this text**
-        2. Parse the text for key themes, arguments, claims, and conclusions
-        3. Identify stated facts, statistics, trends, and assertions that could benefit from verification
-        4. Look for implicit assumptions, knowledge gaps, or areas requiring deeper investigation
-        5. Consider the broader context and implications of the content
-        6. Assess what additional information would strengthen or challenge the text's conclusions
-
-        SEARCH STRATEGY:
-        - **MANDATORY: Base all search ideas on the given context and query**
-        - Prioritize searches that would validate, contextualize, or expand upon key claims
-        - Focus on recent developments, comparative analysis, or alternative perspectives
-        - Target searches that address potential blind spots or unstated assumptions
-        - Consider market dynamics, competitive landscape, or regulatory factors mentioned or implied
-        - Avoid redundant searches for information already comprehensively covered in the text
-
-        OUTPUT FORMAT:
-        Generate exactly 2-3 search ideas using this format:
-        - Query: <specific, actionable search term or phrase>
-        - Reason: <clear explanation of why this search would be valuable and how it connects to the text's content>
-
-        QUALITY CRITERIA:
-        - **Context Integration**: All search ideas must demonstrate understanding of the document's source and purpose
-        - Queries should be precise enough to yield relevant, focused results
-        - Reasons should demonstrate clear logical connection to the source text AND its context
-        - Ideas should provide complementary insights that enhance understanding or decision-making
-        - Focus on searches that would help verify claims, explore implications, or identify opportunities
-        - Prioritize searches with potential business or strategic value
-
-        Consider the author's perspective and potential biases when formulating search strategies.
-
-            **This will be shown in HTML, so put all citations in <a href> and use <ul> <li> if needed.**
-
+            f"""
+            You generate search ideas for a business research assistant to provide real-world insights on companies.
+            Generate exactly three specific ideas to search.
+            Exactly one of them may be inspired by {softbank_blogs()}.
+            You must include explicit references to the context (Company, Role, and Interests).
         """
         )
         return TEXT_PROMPT
     
-    def softbank_blogs(self) -> str:
-        search_endpoint = "https://www.softbank.jp/sbnews"
-
-        response = requests.get(search_endpoint)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        items = soup.select('li.urllist-item.recent-entries-item')
-        blogs = ""
-
-        for item in items:
-            title_tag = item.select_one('a.urllist-title-link')
-            title = title_tag.text.strip() if title_tag else 'No title'
-            article_url = title_tag['href'] if title_tag else 'No URL'
-            blogs+=(f"Title: {title}, URL: {article_url}\n")
-
-        return blogs
-
     def get_web_search_prompt(self) -> str:
         """
         Get the web search prompt using Chain-of-Thought reasoning.
         """
         WEB_SEARCH_PROMPT = f"""
             Search for useful information to the person's context and to the individual's query.
-            First, think carefully step by step about what searches are needed to answer the query.  
+            RETURN ONLY CONCISE, 1 PARAGRAPH RESPONSES FOR A SEARCH.
 
-            Use the **WebSearch** tool to collect timely, contextual information:
+
+            1. First, think carefully step by step about what searches are needed to answer the query.  
+
+            2. Use the **WebSearch** tool to collect timely, contextual information:
             - Articles from newspapers or trusted outlets.
             - Additional blog posts from SoftBank’s website.
             - Broader industry news relevant to SoftBank’s moves.
 
-            Here are a few Softbank blogs. Search the 2 top most relevant.
-            {self.softbank_blogs()}
+            3. Here are a few Softbank blogs. Only 1 time, search the most relevant.
+            {softbank_blogs()}
 
-            Next, search 2 or 3 others that are most relevant from web_search_preview.
+            4. Next, search 2 or 3 others that are most relevant from web_search_preview.
             """
         
         return WEB_SEARCH_PROMPT
@@ -223,16 +205,20 @@ class Prompt:
         Get the writer prompt.
         """
         WRITER_PROMPT = ("""
-            You are a friendly assistant in helping someone learn more about companies, initiatives and their interests.
+            You MUST RUN EXACTLY TWO MCP tools to search: file_search and file_fetch.
+
+            You are an assistant that responds to queries to help someone learn more about companies, initiatives and their interests.
+            Use the searches from earlier in the conversation and respond to the query.
+
             Your task is to synthesize recent developments related to SoftBank using the tools provided. 
             Your report should help the user quickly understand current priorities, strategies, and developments relevant to the company.
             Your report should demonstrate conciseness and an understanding of releases that would otherwise be exceedingly difficult to discover.
-            It should be three paragraphs, and be well structured. 
-            This will be shown as an HTML file! Use bolds, italics, and links to citations. Do not use **,  citeturn0search3turn0news12, etc.
 
-            You have only two turns to search. You MUST NOT go over two turns.
+            It should be three paragraphs, and be well structured with a bold title.
+            Incorporate web info and MCP info.
+            It should be in the LANGUAGE THAT CONVERSATION IS IN. Japanese or English
 
-            If your search is internal to Softbank --> use tool file_search and file_fetch.
+            This will be shown as a Markdown file! Use bolds, italics. Do not use citations, use parenthesis or other forms. Do not use strong,  citeturn0search3turn0news12, etc.
         """
         )
         return WRITER_PROMPT
@@ -244,35 +230,21 @@ class Prompt:
         GUARDRAIL_PROMPT = (
             ""
             + """
-        You are a guardrail agent focused on identifying OBVIOUS NDA violations in materials.
-
-        Your task is to scan for content that clearly and unambiguously contains confidential information that should not be shared publicly.
-
-        ONLY FLAG IF THE MATERIAL CONTAINS:
-        - Explicit confidentiality markings ("CONFIDENTIAL", "PROPRIETARY", "NDA PROTECTED", etc.)
-        - Clear statements indicating information is under NDA ("This information is shared under NDA", "Confidential and proprietary to [Company]")
-        - Obviously sensitive internal data clearly marked as such (internal financial projections marked confidential, unreleased product specifications marked proprietary)
-        - Direct references to confidential agreements or restricted information
+        You are a guardrail agent. Flag ONLY if material contains EXPLICIT confidentiality markers (e.g., "CONFIDENTIAL", "PROPRIETARY", "NDA PROTECTED"), clear NDA statements, or obviously marked sensitive internal data.
 
         DO NOT FLAG:
-        - General business information without explicit confidentiality markings
-        - Public information or publicly available data
-        - Industry analysis or market research
-        - Educational or reference materials
-        - Information that might be sensitive but lacks clear confidentiality indicators
-        - Content where confidentiality is ambiguous or unclear
+        - General business info without explicit markings
+        - Public or industry info
+        - Ambiguous or unmarked content
 
-        DECISION CRITERIA:
-        - **Conservative approach**: Only flag when confidentiality is EXPLICITLY indicated
-        - **Clear evidence required**: Must have obvious markers or statements of confidentiality
-        - **Err on the side of allowing**: When in doubt, do not flag
+        DECISION:
+        - Flag ONLY with clear, explicit evidence
+        - When in doubt, do NOT flag
 
         OUTPUT:
-        Respond with either:
-        - "CLEAR NDA VIOLATION DETECTED: [brief reason]" - only for obvious violations
-        - "NO CLEAR NDA VIOLATION" - for everything else
+        - "CLEAR NDA VIOLATION DETECTED: [reason]" for obvious violations
+        - "NO CLEAR NDA VIOLATION" otherwise
 
-        Focus on protecting clearly confidential information while avoiding false positives on general business content.
         """
         )
         return GUARDRAIL_PROMPT

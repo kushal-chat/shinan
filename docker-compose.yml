@@ -1,14 +1,14 @@
-version: '3.8'
-
 services:
   backend:
     build: 
       context: ./backend/app
       dockerfile: Dockerfile
+    environment:
+      - OPENAI_API_KEY
+      - VECTOR_STORE_ID
     ports:
       - "8000:8000"
-    environment:
-      - UVICORN_RELOAD=true
+      - "8080:8080"
     volumes:
       - ./backend/app:/app
     tty: true
@@ -30,6 +30,8 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - shinan-network
 
 networks:
   shinan-network:

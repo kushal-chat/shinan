@@ -10,20 +10,20 @@ import logging
 from typing import Dict, List, Any
 from fastmcp import FastMCP
 from openai import OpenAI
+from dotenv import load_dotenv
 import os
 
+load_dotenv()
+
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+VECTOR_STORE_ID = os.environ.get("VECTOR_STORE_ID")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# OpenAI configuration
-VECTOR_STORE_ID = "vs_68642a4dab488191b7c7b089cf1abe3e" #OpenAI Vector Store ID https://platform.openai.com/storage/vector_stores/
-
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=OPENAI_API_KEY) 
-# No local data storage needed - using OpenAI Vector Store only
 
 def create_server():
     """Create and configure the MCP server with search and fetch tools."""
@@ -196,7 +196,6 @@ def main():
     except Exception as e:
         logger.error(f"Server error: {e}")
         raise
-
 
 if __name__ == "__main__":
     main()
