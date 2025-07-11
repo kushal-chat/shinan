@@ -169,17 +169,20 @@ class Prompt:
         """
         WEB_SEARCH_PROMPT = f"""
             Search for useful information to the person's context and to the individual's query.
-            First, think carefully step by step about what searches are needed to answer the query.  
+            RETURN ONLY CONCISE, 1 PARAGRAPH RESPONSES FOR A SEARCH.
 
-            Use the **WebSearch** tool to collect timely, contextual information:
+
+            1. First, think carefully step by step about what searches are needed to answer the query.  
+
+            2. Use the **WebSearch** tool to collect timely, contextual information:
             - Articles from newspapers or trusted outlets.
             - Additional blog posts from SoftBank’s website.
             - Broader industry news relevant to SoftBank’s moves.
 
-            Here are a few Softbank blogs. Search the 2 top most relevant.
+            3. Here are a few Softbank blogs. Only 1 time, search the most relevant.
             {softbank_blogs()}
 
-            Next, search 2 or 3 others that are most relevant from web_search_preview.
+            4. Next, search 2 or 3 others that are most relevant from web_search_preview.
             """
         
         return WEB_SEARCH_PROMPT
@@ -202,16 +205,20 @@ class Prompt:
         Get the writer prompt.
         """
         WRITER_PROMPT = ("""
-            You MUST RUN EXACTLY TWO TIMES file_search and file_fetch.
+            You MUST RUN EXACTLY TWO MCP tools to search: file_search and file_fetch.
 
-            You are a friendly assistant in helping someone learn more about companies, initiatives and their interests.
+            You are an assistant that responds to queries to help someone learn more about companies, initiatives and their interests.
+            Use the searches from earlier in the conversation and respond to the query.
+
             Your task is to synthesize recent developments related to SoftBank using the tools provided. 
             Your report should help the user quickly understand current priorities, strategies, and developments relevant to the company.
             Your report should demonstrate conciseness and an understanding of releases that would otherwise be exceedingly difficult to discover.
+
             It should be three paragraphs, and be well structured with a bold title.
-            Incorporate web info and mcp info.
+            Incorporate web info and MCP info.
             It should be in the LANGUAGE THAT CONVERSATION IS IN. Japanese or English
-            This will be shown as a Markdown file! Use bolds, italics, and links to citations. Do not use strong,  citeturn0search3turn0news12, etc.
+
+            This will be shown as a Markdown file! Use bolds, italics. Do not use citations, use parenthesis or other forms. Do not use strong,  citeturn0search3turn0news12, etc.
         """
         )
         return WRITER_PROMPT

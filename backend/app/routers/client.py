@@ -36,7 +36,6 @@ from agents import (
     RunResultStreaming,
     TResponseInputItem,
     custom_span,
-    gen_trace_id,
     trace,
 )
 from agents.extensions.visualization import draw_graph
@@ -88,11 +87,12 @@ class ShinanQuery(BaseModel):
     query: str
 
 # Creating the Shinan Session Manager for data handling.
+# NOTE OpenAI has an implementation of this as well @ https://github.com/openai/openai-agents-python/blob/main/src/agents/memory/session.py
 class ShinanSessionManager:
-    def __init__(self, group_id) -> None:
+    def __init__(self) -> None:
         self.context : ShinanContext = ShinanContext(company="SoftBank", role="Intern", interests=["AI", "Strategy"])   # If reset
         self.input_items : list[TResponseInputItem] = []    # The input items helps agents understand history
-        self.group_id: str = group_id
+        self.group_id: str = ""
         self.text_ideas: TextSearchIdeas = TextSearchIdeas(ideas=[])
         self.analysis: Analysis = Analysis(
             ideas=MaterialSearchIdeas(ideas=[]), 
@@ -136,6 +136,10 @@ class ShinanSessionManager:
     def set_report(self, report: Report) -> None:
         """Set the generated report for the session."""
         self.report = report
+
+    def get_report(self) -> Report:
+        """Get the generated report for the session."""
+        return self.report
             
 class ShinanTextIntelligence:
     """A class that orchestrates the text-based flow of Shinan Intelligence."""
@@ -199,7 +203,7 @@ class ShinanTextIntelligence:
 
     async def run_messages(self, request: ShinanQuery) -> str:
         with trace("Shinan Intelligence Messaging", group_id=self.session.group_id):
-            result = await Runner.run(messages_agent, input=self.session.get_input_items(), context=self.session.get_context())
+            result = await Runner.run(messages_agent, input=self.session.get_report().report, context=self.session.get_context())
         
         self.session.add_input_items({"content": result.final_output, "role": "assistant"})   # type: ignore
         return str(result.final_output)
@@ -217,14 +221,12 @@ class ShinanTextIntelligence:
             research_generator = self._overall_search(ideas)
             async for ev in research_generator:
                 yield ev
-            
-            # Adding original query of user, given above research.
-            self.session.add_input_items({"content": request.query, "role": "user"})
 
-            print(self.session.get_input_items())
+            # Input into the report generator.
+            logger.info(self.session.get_input_items())
 
             # Generating report
-            report_generator = self._generate_report()
+            report_generator = self._generate_report(request)
             async for ev in report_generator:
                 yield ev
 
@@ -261,7 +263,7 @@ class ShinanTextIntelligence:
             elif ev.type == "run_item_stream_event":
                 if ev.item.type == "tool_call_item":
                     yield f"UPDATE 背景を確認させていただきます。"
-                    asyncio.sleep(1.0)
+                    await asyncio.sleep(1.0)
 
                 elif ev.item.type == "tool_call_output_item":
                     """ 
@@ -318,7 +320,7 @@ class ShinanTextIntelligence:
             ) as mcp_server:
                 search_mcp_agent = search_agent.clone(mcp_servers=[mcp_server])
                 result = Runner.run_streamed(
-                    search_mcp_agent,
+                    search_agent,   # For now, I am not allowing search to use MCP servers out of token usage concerns.
                     input_data,
                     context=self.context,
                     max_turns=5
@@ -426,7 +428,7 @@ class ShinanTextIntelligence:
 
         yield "検索を完了しました！今からリポートを作成いたします。"
 
-    async def _generate_report(self) -> AsyncIterator[str]:
+    async def _generate_report(self, request) -> AsyncIterator[str]:
         """Generate a report from a query and search results."""
 
         report_logger = logger.getChild("report")
@@ -434,7 +436,7 @@ class ShinanTextIntelligence:
 
         async with MCPServerSse(name="Shinan MCP Vector Store", params={"url": "http://localhost:8080/sse"}, cache_tools_list=True) as mcp_server:
             writer_mcp_agent = writer_agent.clone(mcp_servers=[mcp_server])
-            result = Runner.run_streamed(writer_mcp_agent, input=self.session.get_input_items(), context=self.context)
+            result = Runner.run_streamed(writer_mcp_agent, input=f"{self.session.get_input_items()} Query: {request.query}", context=self.context)
         
             async for ev in result.stream_events():
                 if ev.type == "run_item_stream_event":
@@ -451,7 +453,7 @@ class ShinanTextIntelligence:
                                 yield f"UPDATE {ev.item.raw_item.action.query}をWEBで検索中..." 
 
                         elif ev.item.raw_item.type == "function_call":
-                            report_logger.info("MCP to access a vector store of SoftBank reports")
+                            report_logger.info("MCP to access a vector store of SoftBank reports", dir(ev.item.raw_item))
                             update_messages = [
                                 "UPDATE MCPを介してソフトバンクに関連する公開資料を検索します...",
                                 "UPDATE ソフトバンクの公開資料をMCP経由で調査中です...",
@@ -543,14 +545,16 @@ class ShinanMaterialIntelligence:
     async def _generate_report(self, search_results: Sequence[str], material_analysis: MaterialInsights) -> str:
         """Generate a report from a query and search results."""
 
-        verifier_tool = verifier_agent.as_tool(
-            tool_name="verifier",
-            tool_description="Use to verify the report is relevant to the context.",
-            custom_output_extractor=_context_relevance,
-        )
-        writer_agent_with_verifier = writer_agent.clone(tools=[verifier_tool])
-        result = await Runner.run(writer_agent_with_verifier, input=self.session.get_input_items(), context=self.context, max_turns=4)
-        return result.final_output()
+        # verifier_tool = verifier_agent.as_tool(
+        #     tool_name="verifier",
+        #     tool_description="Use to verify the report is relevant to the context.",
+        #     custom_output_extractor=_context_relevance,
+        # )
+        # writer_agent_with_verifier = writer_agent.clone(tools=[verifier_tool])
+
+        # Not using verifier for now.
+        result = await Runner.run(writer_agent, input=self.session.get_input_items(), context=self.context, max_turns=4)
+        return str(result.final_output)
 
 async def pdf_hybrid_to_material(upload_file: UploadFile, max_pages: int = 10) -> List[Dict[str, Any]]:
     """
@@ -720,7 +724,7 @@ async def run_query(request: ShinanQuery):
     """
 
     # Reset the group id for each query.
-    self.session.group_id = gen_group_id()
+    session.group_id = gen_group_id()
     manager = ShinanTextIntelligence(session=session)
 
     try:
@@ -761,7 +765,7 @@ async def run_query_research(request: ShinanQuery):
     """
 
     # Reset the group id for each query.
-    self.session.group_id = gen_group_id()
+    session.group_id = gen_group_id()
     manager = ShinanTextIntelligence(session=session)
 
     try: 
@@ -781,7 +785,7 @@ async def run_upload(file: UploadFile = File(...)):
     """
 
     # Reset the group id for each query.
-    self.session.group_id = gen_group_id()
+    session.group_id = gen_group_id()
     manager = ShinanMaterialIntelligence(session=session)
 
     content_type = file.content_type or ""
