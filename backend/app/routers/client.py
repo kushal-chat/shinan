@@ -15,14 +15,14 @@ import random
 from re import search
 from token import OP
 import uuid
-from typing import Any, AsyncIterator, Dict, List, Sequence, cast
+from typing import Any, AsyncIterator, Dict, List, Sequence
 
-from agents import mcp, exceptions
+from agents.tracing.util import gen_group_id
+
 import fitz
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from PIL import Image
-from openai.types.responses.response_item import McpCall
 import pytesseract
 from pydantic import BaseModel
 from redis.asyncio import Redis
@@ -30,27 +30,20 @@ from starlette.status import HTTP_400_BAD_REQUEST
 
 from agents import (
     Agent,
-    HandoffOutputItem,
     InputGuardrailTripwireTriggered,
-    MessageOutputItem,
     Runner,
     RunResult,
     RunResultStreaming,
     TResponseInputItem,
-    ToolCallItem,
-    ToolCallOutputItem,
     custom_span,
     gen_trace_id,
     trace,
 )
 from agents.extensions.visualization import draw_graph
-from agents.items import ItemHelpers, TResponse, TResponseOutputItem
-from agents.mcp import MCPServer, MCPServerSse
+from agents.items import ItemHelpers
+from agents.mcp import MCPServerSse
 from context import ShinanContext
 from openai.types.responses import (
-    ResponseOutputMessage,
-    ResponseOutputRefusal,
-    ResponseOutputText,
     ResponseTextDeltaEvent,
 )
 from tools.idea_generation.material_idea_agent import (
@@ -66,11 +59,8 @@ from tools.idea_generation.text_idea_agent import (
     TextSearchIdeas,
     text_agent,
 )
-from tools.idea_generation.clarification_agent import (
-    clarification_agent
-)
 from tools.report_generation.verifier_agent import verifier_agent
-from tools.report_generation.writer_agent import Report, writer_agent, deep_research_agent
+from tools.report_generation.writer_agent import Report, writer_agent
 from tools.research.search_agent import search_agent
 from tools.messages.messages_agent import messages_agent
 
@@ -99,10 +89,10 @@ class ShinanQuery(BaseModel):
 
 # Creating the Shinan Session Manager for data handling.
 class ShinanSessionManager:
-    def __init__(self) -> None:
-        self.context : ShinanContext = ShinanContext(company="SoftBank", role="Intern", interests=["AI", "Strategy"])
-        self.input_items : List[TResponseInputItem] = []
-
+    def __init__(self, group_id) -> None:
+        self.context : ShinanContext = ShinanContext(company="SoftBank", role="Intern", interests=["AI", "Strategy"])   # If reset
+        self.input_items : list[TResponseInputItem] = []    # The input items helps agents understand history
+        self.group_id: str = group_id
         self.text_ideas: TextSearchIdeas = TextSearchIdeas(ideas=[])
         self.analysis: Analysis = Analysis(
             ideas=MaterialSearchIdeas(ideas=[]), 
@@ -208,19 +198,14 @@ class ShinanTextIntelligence:
                     return content
 
     async def run_messages(self, request: ShinanQuery) -> str:
-        self.session.add_input_items({"content": request.query, "role": "user"})
-        trace_id = gen_trace_id()
-
-        with trace("Shinan Intelligence Messaging", trace_id=trace_id):
+        with trace("Shinan Intelligence Messaging", group_id=self.session.group_id):
             result = await Runner.run(messages_agent, input=self.session.get_input_items(), context=self.session.get_context())
         
-        self.session.add_input_items({"content": result.final_output, "role": "bot"}) # type: ignore
+        self.session.add_input_items({"content": result.final_output, "role": "assistant"})   # type: ignore
         return str(result.final_output)
 
     async def run_query(self, request: ShinanQuery) -> AsyncIterator[str]:
-
-        trace_id = gen_trace_id()
-        with trace("Shinan Intelligence Text Workflow", trace_id=trace_id):
+        with trace("Shinan Intelligence Text Workflow", group_id=self.session.group_id):
             
             # Generating search ideas 
             ideas_generator = self._generate_search_ideas(request.query, text_agent)
@@ -498,8 +483,7 @@ class ShinanMaterialIntelligence:
         return self.session.get_context()
 
     async def run_upload(self, material: list[TResponseInputItem]) -> str:
-        trace_id = gen_trace_id()
-        with trace("Shinan Intelligence Material Workflow", trace_id=trace_id):
+        with trace("Shinan Intelligence Material Workflow", group_id=self.session.group_id):
             # Generate search ideas and material analysis
             analysis: Analysis = await self._generate_search_ideas_material(material, material_agent)
 
@@ -567,8 +551,6 @@ class ShinanMaterialIntelligence:
         writer_agent_with_verifier = writer_agent.clone(tools=[verifier_tool])
         result = await Runner.run(writer_agent_with_verifier, input=self.session.get_input_items(), context=self.context, max_turns=4)
         return result.final_output()
-
-session = ShinanSessionManager()
 
 async def pdf_hybrid_to_material(upload_file: UploadFile, max_pages: int = 10) -> List[Dict[str, Any]]:
     """
@@ -717,13 +699,17 @@ async def png_to_material(upload_file: UploadFile) -> List[Dict[str, Any]]:
 
 ALLOWED_TYPES = {"application/pdf": pdf_hybrid_to_material, "image/png": png_to_material, }
 
+# Create the session manager, and generate a group ID to link all traces.
+session = ShinanSessionManager()
+
 @router.post("/context")
 async def set_context(context: ShinanContext):
     if not context.company or not context.role or context.interests is None:
         raise HTTPException(
             status_code=400,
-            detail="company, role, and interests are required fields."
+            detail="Company, role, and interests are required fields."
         )
+    logger.info(f"Context has been set to {context.model_dump(mode='str')}.")
     session.set_context(context)
 
 @router.post("/query")
@@ -732,9 +718,13 @@ async def run_query(request: ShinanQuery):
     Main endpoint to process queries in a text format.
     Access to web search and MCP tools.
     """
+
+    # Reset the group id for each query.
+    self.session.group_id = gen_group_id()
     manager = ShinanTextIntelligence(session=session)
 
     try:
+        logger.info(f"Query {request.query} is running.")
         result = manager.run_query(request)
         return StreamingResponse(result, media_type="application/json")
 
@@ -749,6 +739,8 @@ async def run_messages(request: ShinanQuery):
     """
     Main endpoint to respond simply to queries in a text format.
     """
+
+    # Continue the same group id.
     manager = ShinanTextIntelligence(session=session)
 
     try:
@@ -767,6 +759,9 @@ async def run_query_research(request: ShinanQuery):
     Main endpoint to process queries in a text format via Deep Research API.
     API call to Responses API Deep Research functionality.
     """
+
+    # Reset the group id for each query.
+    self.session.group_id = gen_group_id()
     manager = ShinanTextIntelligence(session=session)
 
     try: 
@@ -784,7 +779,11 @@ async def run_upload(file: UploadFile = File(...)):
     """
     Main endpoint to process queries in a PDF or PNG format.
     """
+
+    # Reset the group id for each query.
+    self.session.group_id = gen_group_id()
     manager = ShinanMaterialIntelligence(session=session)
+
     content_type = file.content_type or ""
     processor = ALLOWED_TYPES.get(content_type)
     if not processor:
