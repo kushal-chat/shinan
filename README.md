@@ -7,13 +7,6 @@ Please see `kushalc.framer.ai` for blog posts detailing progress and architectur
 
 ---
 
-## ✨ Features
-
-- **Multi-agent Workflow**: 
-- **Dockerized**: Easy to run locally or deploy in production.
-
----
-
 ## 🏗️ Architecture
 
 ### Frameworks
