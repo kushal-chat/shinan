@@ -19,7 +19,7 @@ guardrail_agent = Agent(
 async def sensitive_guardrail(ctx: RunContextWrapper, agent: Agent, input: str | list) -> GuardrailFunctionOutput:
     """Guardrail for the idea agent."""
     result = await Runner.run(guardrail_agent, input, context=ctx.context)
-
+    
     return GuardrailFunctionOutput(
         output_info=result.final_output,
         tripwire_triggered=result.final_output.is_sensitive,  

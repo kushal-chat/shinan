@@ -49,6 +49,15 @@ def create_server():
             
         Returns:
             Complete document with id, title, full text content, optional URL, and metadata
+
+        ソフトバンクの戦略情報をIDで取得し、詳細な分析や引用に利用します。
+        検索ツールで関連するドキュメントを見つけた後に使用し、
+        ソフトバンク分析のための完全な情報を取得してください。
+        引数:
+         id: ベクトルストアのファイルID（file-xxx）またはローカルドキュメントID
+        戻り値:
+         id、タイトル、全文コンテンツ、オプションのURL、およびメタデータを含む完全なドキュメント
+
         """
         if not query or not query.strip():
             return {"results": []}
@@ -117,7 +126,14 @@ def create_server():
             
         Returns:
             Complete document with id, title, full text content, optional URL, and metadata
-            
+
+        ソフトバンクの戦略情報をIDで取得し、詳細な分析や引用に利用します。
+        検索ツールで関連するドキュメントを見つけた後に使用し、
+        ソフトバンク分析のための完全な情報を取得してください。
+        引数:
+         id: ベクトルストアのファイルID（file-xxx）またはローカルドキュメントID
+        戻り値:
+         id、タイトル、全文コンテンツ、オプションのURL、およびメタデータを含む完全なドキュメント 
         """
         if not id:
             raise ValueError("Document ID is required")

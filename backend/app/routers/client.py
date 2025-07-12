@@ -203,7 +203,11 @@ class ShinanTextIntelligence:
 
     async def run_messages(self, request: ShinanQuery) -> str:
         with trace("Shinan Intelligence Messaging", group_id=self.session.group_id):
-            result = await Runner.run(messages_agent, input=self.session.get_report().report, context=self.session.get_context())
+            
+            messages_input : list[TResponseInputItem] = [{"content": self.session.get_report().report, "role": "assistant"}, {"content": request.query, "role": "user"}]
+            
+            # TODO: Input is NOT a list of TResponseInputItems in this case. Need to take a look.
+            result = await Runner.run(messages_agent, input=f"{messages_input}", context=self.session.get_context())
         
         self.session.add_input_items({"content": result.final_output, "role": "assistant"})   # type: ignore
         return str(result.final_output)
@@ -338,7 +342,8 @@ class ShinanTextIntelligence:
                             action = getattr(ev.item.raw_item, "action", None)
                             if action and getattr(action, "type", None) == "search":
                                 search_logger.info(f"Searching the web for: {getattr(action, 'query', '')}")
-                                yield f"UPDATE {idea.query}をWEBで検索中..."
+                                if idea.query != "None":
+                                    yield f"UPDATE {idea.query}をWEBで検索中..."
                                 await asyncio.sleep(1.0)
 
                         elif getattr(ev.item.raw_item, "type", None) == "function_call":
@@ -436,6 +441,8 @@ class ShinanTextIntelligence:
 
         async with MCPServerSse(name="Shinan MCP Vector Store", params={"url": "http://localhost:8080/sse"}, cache_tools_list=True) as mcp_server:
             writer_mcp_agent = writer_agent.clone(mcp_servers=[mcp_server])
+
+            # NOTE: Input is NOT a list of TResponseInputItems in this case. Need to take a look.
             result = Runner.run_streamed(writer_mcp_agent, input=f"{self.session.get_input_items()} Query: {request.query}", context=self.context)
         
             async for ev in result.stream_events():
@@ -472,7 +479,10 @@ class ShinanTextIntelligence:
                     elif ev.item.type == "message_output_item":
                         yield ("UPDATE リポートを完成しました！")
                         await asyncio.sleep(2.0)
-                        yield str(ItemHelpers.text_message_output(ev.item))
+
+                        final_report = Report(report=ItemHelpers.text_message_output(ev.item))
+                        self.session.set_report(final_report)
+                        yield final_report.report
 
 class ShinanMaterialIntelligence:
     """A class that orchestrates the material-based flow of Shinan Intelligence."""
@@ -705,6 +715,7 @@ ALLOWED_TYPES = {"application/pdf": pdf_hybrid_to_material, "image/png": png_to_
 
 # Create the session manager, and generate a group ID to link all traces.
 session = ShinanSessionManager()
+manager = ShinanTextIntelligence(session=session)
 
 @router.post("/context")
 async def set_context(context: ShinanContext):
@@ -725,6 +736,8 @@ async def run_query(request: ShinanQuery):
 
     # Reset the group id for each query.
     session.group_id = gen_group_id()
+
+    # Create a new manager.
     manager = ShinanTextIntelligence(session=session)
 
     try:
@@ -743,9 +756,6 @@ async def run_messages(request: ShinanQuery):
     """
     Main endpoint to respond simply to queries in a text format.
     """
-
-    # Continue the same group id.
-    manager = ShinanTextIntelligence(session=session)
 
     try:
         result = await manager.run_messages(request)
