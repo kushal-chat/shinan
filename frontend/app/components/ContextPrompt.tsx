@@ -21,7 +21,7 @@ const ContextPrompt: React.FC<ContextPromptProps> = ({ onSubmit }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company.trim() || !role.trim() || !interests.trim()) {
-      setError("全ての科目を入力してください。");
+      setError("全ての項目を入力してください。");
       return;
     }
     setError("");
