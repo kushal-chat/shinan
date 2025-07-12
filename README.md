@@ -7,7 +7,7 @@ Please see `kushalc.framer.ai` for blog posts detailing progress and architectur
 
 ---
 
-## 🏗️ Architecture
+## 🏗Architecture
 
 ### Frameworks
 - **Backend**: FastAPI (Python) - RESTful API, async, streaming support
@@ -33,17 +33,17 @@ Please see `kushalc.framer.ai` for blog posts detailing progress and architectur
     - *OpenAI Models* in choosing optimal models, using VLM when needed
     - *Deep Research API*
         - *Citation*
-    - etc.
+    - *etc.*
 - *OpenAI Responses API* as a foundation, particularly for TResponseInputItem
 - *OCR* as `pytesseract` for OCR on PDFs / images for text
 - *Asyncio* and applications to optimization for streaming
 - *Redis* which I intend to integrate for persistency
 - *MCP Integrations with Applications* like Cursor and Claude Desktop
-- etc.
+- *etc.*
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -96,7 +96,7 @@ Upload a PDF or PNG for analysis. Returns the analysis result.
 
 ---
 
-## 🧩 Frontend Components
+## Frontend Components
 
 - **ContextPrompt**: Modal for entering user context.
 - **FileUpload**: Button for uploading PDF/PNG, shows results in chat style.
