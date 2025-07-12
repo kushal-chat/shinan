@@ -7,7 +7,7 @@ Please see `kushalc.framer.ai` for blog posts detailing progress and architectur
 
 ---
 
-## 🏗Architecture
+## Architecture
 
 ### Frameworks
 - **Backend**: FastAPI (Python) - RESTful API, async, streaming support
@@ -69,7 +69,7 @@ docker-compose up --build
 
 ---
 
-## 🖥️ User Experience
+## User Experience
 
 - On first visit, users are prompted for **context** (company, role, interests).
 - **Chat**: Type a question and see real-time agent progress (steps) and the final answer. (Research, Messages, and Deep Research modes available)
@@ -77,7 +77,7 @@ docker-compose up --build
 
 ---
 
-## 🛠️ API Endpoints
+## API Endpoints
 
 ### `/client/context` (POST)
 Set the user context (company, role, interests).
