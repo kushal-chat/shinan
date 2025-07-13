@@ -3,7 +3,7 @@
 A full-stack platform built using new OpenAI Agents SDK and MCP technology with real-time agent feedback, orchestration, file (PDF/PNG) upload, and context-aware conversations.  
 Built with **FastAPI** (Python) and **Next.js** (React/TypeScript), and containerized on Docker. Deployed on Vercel and Railway (in progress).
 
-Please see [kushalc.framer.ai](kushalc.framer.ai) for blog posts detailing progress and architecture.
+Please see [kushalc.framer.ai](https://kushalc.framer.ai) for blog posts detailing progress and architecture.
 
 ---
 
