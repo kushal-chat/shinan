@@ -10,9 +10,8 @@ Please see [kushalc.framer.ai](https://kushalc.framer.ai) for blog posts detaili
 ## Architecture
 
 ### Frameworks
-- **Backend**: FastAPI (Python) - RESTful API, async, streaming support
+- **Backend**: FastAPI (Python) - RESTful API, async, streaming support, OpenAI Agents SDK + MCP
 - **Frontend**: Next.js (React/TypeScript), Tailwind CSS 
-- **Middleware**: CORS
 - **Containerization**: Docker & Docker Compose, as well as Supervisor for backend
 
 ### Technologies
@@ -20,25 +19,32 @@ Please see [kushalc.framer.ai](https://kushalc.framer.ai) for blog posts detaili
 - *AI Agent Tools*
     - *Context Management* for aligning responses with user’s context (i.e. CFO at AI lab, student)
     - *Guardrail Agents* for sensitive material input prevention.
+    - *Prompt Engineering* for accurate tool usage and handoffs.
+        - *Chain-of-Thought Prompting* to elicit reasoning per the [GPT 4.1 Prompting Guide](https://cookbook.openai.com/examples/gpt4-1_prompting_guide)
+        - *Dynamic Instruction* capabilities for more targeted searches.
     - *Tools*
-        - *OpenAI Hosted Tools* like `WebSearch()`
-        - *Function Tools*
+        - *OpenAI Hosted Tools* like `WebSearch()`, `FileSearchTool()`, `HostedMCP`
+        - *Function Tools* for verification, context retrieval, etc.
         - *Agents as Tools* for verifier agent.
-    - *Structured Outputs* throughout
+    - *Structured Outputs* with Pydantic throughout.
+    - *asyncio (Asynchronous Development)* for complex engineering tasks like streaming multiple concurrent searches and streaming entire research in real-time.
     - *Handoffs*
-    - *Streaming* for sending updates to frontend
-    - *MCP* for connecting to vector store
-    - *OpenAI Vector Stores* f
+    - *FastAPI* extensively for routing, sending streaming updates to frontend, and CORS middleware
+    - *FastMCP* and generally *MCP* for connecting to vector store
+    - *OpenAI Vector Stores* for files
+        - *Llama-Index* to a small extent to review other vector store options.
     - *Visualization* for visualizing backend workflow
     - *OpenAI Models* in choosing optimal models, using VLM when needed
     - *Deep Research API*
         - *Citation*
     - *etc.*
-- *OpenAI Responses API* as a foundation, particularly for TResponseInputItem
+- *OpenAI Responses API* as a foundation, particularly for TResponseInputItem and Deep Research API
 - *OCR* as `pytesseract` for OCR on PDFs / images for text
 - *Asyncio* and applications to optimization for streaming
 - *Redis* which I intend to integrate for persistency
 - *MCP Integrations with Applications* like Cursor and Claude Desktop
+- *Docker*, *Docker-Compose* and *Supervisor* applied to monorepos of Next.js + Python
+    - *Railway* and *Vercel* for deployment, and gained some knowhow surrounding middleware bug fixing
 - *etc.*
 
 ---
