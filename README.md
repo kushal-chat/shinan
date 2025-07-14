@@ -40,7 +40,6 @@ Please see [kushalc.framer.ai](https://kushalc.framer.ai) for blog posts detaili
     - *etc.*
 - *OpenAI Responses API* as a foundation, particularly for TResponseInputItem and Deep Research API
 - *OCR* as `pytesseract` for OCR on PDFs / images for text
-- *Asyncio* and applications to optimization for streaming
 - *Redis* which I intend to integrate for persistency
 - *MCP Integrations with Applications* like Cursor and Claude Desktop
 - *Docker*, *Docker-Compose* and *Supervisor* applied to monorepos of Next.js + Python
